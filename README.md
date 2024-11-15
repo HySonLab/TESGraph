@@ -1,5 +1,7 @@
 # TESGNN: 3D Temporal Equivariant Scene Graph Neural Networks
 
+![Overall-Architecture](overall_V3.png)
+
 ## 3D Semantic Scene Graph Estimations
 
 This is a framework for developing 3D semantic scene graph estimations.

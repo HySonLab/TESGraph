@@ -1,7 +1,6 @@
-<<<<<<< HEAD
-# 3D Temporal Equivariant Scene Graph 
-=======
-# 3D Semantic Scene Graph Estimations
+# TESGNN: 3D Temporal Equivariant Scene Graph Neural Networks
+
+## 3D Semantic Scene Graph Estimations
 
 This is a framework for developing 3D semantic scene graph estimations.
 The repository includes five different methods, namely [IMP][IMP], [VGfM][VGfM], [3DSSG][3DSSG], [SGFN][SGFN] and [MonoSSG][MonoSSG]. 
@@ -25,8 +24,8 @@ The repository includes five different methods, namely [IMP][IMP], [VGfM][VGfM],
 
 </details>
 
-# Setup
-## Environment.
+## Setup
+### Environment.
 ```
 # if you don't have miniconda
 source setup_conda.sh 
@@ -39,7 +38,7 @@ ln -s /path/to/your/3RScan ./data/
 
 source Init.sh # This will set PYTHONPATH and activate the environment for you.
 ```
-# Preparation
+## Preparation
 Download data
 ```
 cd files
@@ -47,7 +46,7 @@ bash preparation.sh
 ```
 
 
-## Prepare 3RScan dataset
+### Prepare 3RScan dataset
 Please make sure you agree the [3RScan Terms of Use](https://forms.gle/NvL5dvB4tSFrHfQH6) first, and get the download script and put it right at the 3RScan main directory.
 
 Then run
@@ -55,7 +54,7 @@ Then run
 python scripts/Run_prepare_dataset_3RScan.py --download --thread 8
 ```
 
-## Generate Experiment data
+### Generate Experiment data
 ```
 # For GT
 # This script downloads preprocessed data for GT data generation, and generate GT data.
@@ -72,7 +71,7 @@ generates training data.
 python scripts/RUN_prepare_Sparse_setup_3RScan.py -c configs/dataset/config_base_3RScan_orbslam_l20.yaml --thread 16
 ```
 
-# Train 
+## Train 
 The first time you may need want to chagne the wandb account in `configs/config_default.yaml`. Change the `wanb.entity` and `wanb.project` to yours. Or you can disable logging by passing `--dry_run`.
 ```
 source Init.sh
@@ -87,7 +86,7 @@ python main_test.py --mode train --config /path/to/your/config/file
 python main_test.py --mode eval --config /path/to/your/config/file
 ```
 
-# Trained models
+## Trained models
 We provide trained model using the optimized code (this one), instead of the one reported in our CVPR23 paper. Although the numbers are different but all methods follow the same trend. We encourage people compare to the results obtained by yourself using this repo.
 
 Download the trained models and unzip them under `experiments` folder (you may need to create one by yourself). 
@@ -160,13 +159,12 @@ With the same setup as the Table 2. 3RSca dataset with 160 objects and 26 predic
 [19]: https://www.campar.in.tum.de/public_datasets/2023_cvpr_wusc/trained_models/SGFN_full_l160.zip
 [20]: https://www.campar.in.tum.de/public_datasets/2023_cvpr_wusc/trained_models/JointSSG_full_l160.zip
 
-# License
+## License
 <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-nc-sa/4.0/88x31.png" /></a><br />This work is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/">Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License</a>.
 
-# Citations
-If you find the code useful please consider citing our papers:
+## References
 
-```
+```bibtex
 @inproceedings{wu2023incremental,
   title={Incremental 3D Semantic Scene Graph Prediction from RGB Sequences},
   author={Wu, Shun-Cheng and Tateno, Keisuke and Navab, Nassir and Tombari, Federico},
@@ -195,4 +193,14 @@ If you find the code useful please consider citing our papers:
 [MonoSSG]: https://openaccess.thecvf.com/content/CVPR2023/papers/Wu_Incremental_3D_Semantic_Scene_Graph_Prediction_From_RGB_Sequences_CVPR_2023_paper.pdf
 [SGFN]: https://openaccess.thecvf.com/content/CVPR2021/papers/Wu_SceneGraphFusion_Incremental_3D_Scene_Graph_Prediction_From_RGB-D_Sequences_CVPR_2021_paper.pdf
 [3DSSG]: https://openaccess.thecvf.com/content_CVPR_2020/papers/Wald_Learning_3D_Semantic_Scene_Graphs_From_3D_Indoor_Reconstructions_CVPR_2020_paper.pdf
->>>>>>> First commit
+
+## Please cite our work!
+
+```bibtex
+@article{pham2024esgnn,
+  title={ESGNN: Towards Equivariant Scene Graph Neural Network for 3D Scene Understanding},
+  author={Pham, Quang PM and Nguyen, Khoi TN and Ngo, Lan C and Do, Truong and Hy, Truong Son},
+  journal={arXiv preprint arXiv:2407.00609},
+  year={2024}
+}
+```

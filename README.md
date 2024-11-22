@@ -36,7 +36,7 @@ You can then go to WanDB and track the results. You can also compare with multip
 
 ## Temporal Model Training
 
-Updating
+Updating. Please refer to the notebook to check for our model architecture and training process if you need.
 
 ## Please cite our work!
 

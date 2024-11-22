@@ -12,7 +12,7 @@ Our code base is adopted from [3D Semantic Scene Graph Estimations](https://gith
 
 Please refer to their [README.md's Preparation section](https://github.com/ShunChengWu/3DSSG?tab=readme-ov-file#preparation) to install and set up the environment, and download necessary dataset and libraries.
 
-## Train and monitor result
+## ESGNN - Train and monitor result
 
 **Train config**: The framework provides several training configs based on different methods. 
 
@@ -29,10 +29,14 @@ python main_esgnn.py --mode eval --config /path/to/your/config/file
 
 Using the config for ESGNN should be:
 ```python
-python main_test.py --mode train --config ./configs/config_ESGNN_full_l20.yaml
+python main_esgnn.py --mode train --config ./configs/config_ESGNN_full_l20.yaml
 ```
 
 You can then go to WanDB and track the results. You can also compare with multiple results by running the training of other methods.
+
+## Temporal Model Training
+
+Updating
 
 ## Please cite our work!
 

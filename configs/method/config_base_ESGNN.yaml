@@ -1,5 +1,5 @@
 model:
- method: sgfn
+ method: esgnn
  multi_rel: false # multiple relationship 
  use_rgb: true
  use_normal: true

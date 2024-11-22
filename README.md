@@ -51,3 +51,12 @@ Updating. Please refer to the notebook to check for our model architecture and t
       url={https://arxiv.org/abs/2411.10509}, 
 }
 ```
+
+```bibtex
+@article{pham2024esgnn,
+  title={ESGNN: Towards Equivariant Scene Graph Neural Network for 3D Scene Understanding},
+  author={Pham, Quang PM and Nguyen, Khoi TN and Ngo, Lan C and Do, Truong and Hy, Truong Son},
+  journal={arXiv preprint arXiv:2407.00609},
+  year={2024}
+}
+```

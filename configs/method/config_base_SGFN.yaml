@@ -14,7 +14,6 @@ model:
  image_encoder:
   method: none #[none,mvcnn,mean]
  gnn:
-  # method: fan #segnn # [none, fan, triplet]
   method: fan # [none, fan, triplet]
   hidden_dim: 256
   num_layers: 2

@@ -332,4 +332,4 @@ if __name__ == '__main__':
     resnet = Resnet18(512,False)
     x = torch.rand(1,3,480,640)
     y = resnet(x)
-    print(y.shape)
+    # print(y.shape)

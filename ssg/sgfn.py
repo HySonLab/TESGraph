@@ -20,25 +20,23 @@ class SGFN(nn.Module):
     def __init__(self, cfg, num_obj_cls, num_rel_cls, device):
         super().__init__()
         self.cfg = cfg
-        self._device = device #cuda
-        self.with_img_encoder = self.cfg.model.image_encoder.method != 'none' #False 
-        self.with_pts_encoder = self.cfg.model.node_encoder.method != 'none' #True 
-        
-        node_feature_dim = cfg.model.node_feature_dim #256
-        edge_feature_dim = cfg.model.edge_feature_dim #256
-   
+        self._device = device
+        self.with_img_encoder = self.cfg.model.image_encoder.method != 'none'
+        self.with_pts_encoder = self.cfg.model.node_encoder.method != 'none'
+        node_feature_dim = cfg.model.node_feature_dim
+        edge_feature_dim = cfg.model.edge_feature_dim
+
         if self.with_img_encoder and self.with_pts_encoder:
             raise NotImplementedError("")
 
-        self.use_spatial = use_spatial = self.cfg.model.spatial_encoder.method != 'none' #True
-        
+        self.use_spatial = use_spatial = self.cfg.model.spatial_encoder.method != 'none'
         sptial_feature_dim = 0
         if use_spatial:
             if self.with_pts_encoder:
-                # # ignore centroid (1 1-3=8)
-                sptial_feature_dim =8
+                # # ignore centroid (11-3=8)
+                sptial_feature_dim = 8
                 node_feature_dim -= sptial_feature_dim
-                cfg.model.node_feature_dim = node_feature_dim 
+                cfg.model.node_feature_dim = node_feature_dim
             if self.with_img_encoder:
                 sptial_feature_dim = 6
                 # sptial_feature_dim = 0
@@ -122,17 +120,15 @@ class SGFN(nn.Module):
                 models['spatial_encoder'] = torch.nn.Linear(
                     sptial_feature_dim, cfg.model.spatial_encoder.dim)
                 node_feature_dim += cfg.model.spatial_encoder.dim
-                print("I love MU")
             elif self.cfg.model.spatial_encoder.method == 'identity':
                 models['spatial_encoder'] = torch.nn.Identity()
                 node_feature_dim += sptial_feature_dim
-                print("I love Real")
             else:
                 raise NotImplementedError()
         else:
             models['spatial_encoder'] = torch.nn.Identity()
             node_feature_dim += sptial_feature_dim
-### Modify from Here hahahahahaha--------------------------------------------
+
         cfg.model.node_feature_dim = node_feature_dim
 
         if cfg.model.gnn.method != 'none':
@@ -183,13 +179,11 @@ class SGFN(nn.Module):
                                                   batch_norm=with_bn, drop_out=cfg.model.node_classifier.dropout)
 
         if cfg.model.multi_rel:
-            print("I love Barca")
             models['rel_predictor'] = PointNetRelClsMulti(
                 num_rel_cls,
                 in_size=edge_feature_dim,
                 batch_norm=with_bn, drop_out=True)
-        else: #This one
-            print('I love Ronaldo')
+        else:
             models['rel_predictor'] = PointNetRelCls(
                 num_rel_cls,
                 in_size=edge_feature_dim,
@@ -222,7 +216,7 @@ class SGFN(nn.Module):
         '''compute node feature'''
         # from points
         if self.with_pts_encoder:
-            data['node'].x = self.obj_encoder(data['node'].pts) ### Output 248 after pointnet encoder
+            data['node'].x = self.obj_encoder(data['node'].pts)
         # from imgae
         if self.with_img_encoder:
             img_dict = self.img_encoder(
@@ -260,16 +254,12 @@ class SGFN(nn.Module):
             node_feature_ori = None
             if not self.cfg.model.gnn.node_from_gnn:
                 node_feature_ori = data['node'].x
-            # print(self.cfg.model.method)
             if hasattr(self, 'gnn') and self.gnn is not None:
-                # gnn_nodes_feature, gnn_edges_feature, probs = \
-                #     self.gnn(data)
-                #data['node'].x = gnn_nodes_feature
-                #data['node', 'to', 'node'].x = gnn_edges_feature
-                h, x, a = self.gnn(data)
-                data['node'].x = h
-                data['coord'].x = x
-                data['node', 'to', 'node'].x = a
+                gnn_nodes_feature, gnn_edges_feature, probs = \
+                    self.gnn(data)
+
+                data['node'].x = gnn_nodes_feature
+                data['node', 'to', 'node'].x = gnn_edges_feature
             if not self.cfg.model.gnn.node_from_gnn:
                 data['node'].x = node_feature_ori
         '''Classification'''

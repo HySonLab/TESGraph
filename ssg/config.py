@@ -2,13 +2,14 @@ import os
 import copy
 import logging
 import ssg
-from ssg import SGFN, SGPN, IMP, JointSG
+from ssg import SGFN, SGPN, IMP, JointSG, ESGNN
 from torch.utils.tensorboard import SummaryWriter
 from codeLib.loggers import WandbLogger
 from codeLib.common import filter_args_create
 import torch.optim as optim
 from ssg.trainer import trainer_dict
 from copy import deepcopy
+import yaml
 
 logger_py = logging.getLogger(__name__)
 
@@ -17,6 +18,7 @@ method_dict = {
     'sgpn': SGPN,
     'imp': IMP,
     'jointsg': JointSG,
+    'esgnn': ESGNN
     
 }
 
@@ -85,7 +87,7 @@ def get_model(cfg, num_obj_cls, num_rel_cls):
         device (device): pytorch device
         dataset (dataset): dataset
     '''
-    if cfg.model.method == 'sgfn' or cfg.model.method == 'sgpn' or cfg.model.method == 'jointsg':
+    if cfg.model.method == 'sgfn' or cfg.model.method == 'sgpn' or cfg.model.method == 'esgnn' or cfg.model.method == 'jointsg':
         return method_dict[cfg.model.method](
             cfg=cfg,
             num_obj_cls=num_obj_cls,
@@ -164,7 +166,47 @@ def get_logger(cfg):
         log_dir = cfg.wandb.dir
         if not os.path.exists(log_dir):
             os.makedirs(log_dir)
-        cfg.wandb.name = cfg.wandb.id = name
+
+        ran_ids_path = f'{log_dir}already_run_ids.yml'
+        if os.path.isfile(ran_ids_path):
+            with open(ran_ids_path, 'r') as f:
+                ran_ids = yaml.safe_load(f)
+                f.close()
+        else:
+            ran_ids = {}
+            
+        if ran_ids is None:
+            ran_ids = {}
+        if cfg.wandb.project not in ran_ids:
+            ran_ids[cfg.wandb.project] = {-1: "Init new run"}
+        
+        print(f"Run Wandb project {cfg.wandb.project} with run_name {cfg.wandb.name}")
+        try:
+            if cfg.wandb.id != -1:
+                print(f"Existing run_id {cfg.wandb.id} with run_name {ran_ids[cfg.wandb.project][cfg.wandb.id]}")
+        except KeyError:
+            raise KeyError(f"Wandb run_id {cfg.wandb.id} not found! You may want to create a new run.")
+        
+        if cfg.wandb.id == -1:
+            new_id = int(list(ran_ids[cfg.wandb.project].keys())[-1]) + 1
+            new_id = str(new_id).zfill(4)
+            cfg.wandb.id = new_id
+            print(f"Wandb run_id is set to -1. Create new run for {cfg.wandb.name} with new id {cfg.wandb.id}")
+        else:
+            assert ran_ids[cfg.wandb.project][cfg.wandb.id] == cfg.wandb.name,\
+                f"Error This previous run_id is used for different run_name.\nYou are using {cfg.wandb.name} while this run_id is for {ran_ids[cfg.wandb.project][cfg.wandb.id]}"
+        
+        ran_ids[cfg.wandb.project][cfg.wandb.id] = cfg.wandb.name
+        
+        assert cfg.wandb.id in list(ran_ids[cfg.wandb.project].keys()),\
+            "Error: run ID does not exist. You may want to create a new run."
+        
+        # Update ran IDs.
+        with open(ran_ids_path, 'w+') as f:
+            yaml.dump(ran_ids, f)
+            f.close()
+        
+        #cfg.wandb.name = cfg.wandb.id = name
         logger = filter_args_create(WandbLogger, {"cfg": cfg, **cfg.wandb})
         logger.log_config(cfg)
         cfg = logger.config

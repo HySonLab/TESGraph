@@ -3,3 +3,6 @@ model:
  multi_rel: true # multiple relationship 
 wandb:
  tags: ["ssg", "sgfn",'full','l160']
+training:
+ batch: 1
+ data_workers: 7

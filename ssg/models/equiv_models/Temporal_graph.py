@@ -93,9 +93,9 @@ class GCNConv_Fixed_W(MessagePassing):
         x = torch.matmul(x, W)
 
         # propagate_type: (x: Tensor, edge_weight: OptTensor)
-        print(x.shape)
-        print(edge_weight.shape)
-        print(edge_index)
+        # print(x.shape)
+        # print(edge_weight.shape)
+        # print(edge_index)
         # print((edge_weight.view(-1, 1) * [x[1]]).shape)
 
         out = self.propagate(edge_index, x=x, edge_weight=edge_weight,

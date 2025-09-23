@@ -447,8 +447,8 @@ class Trainer_SGFN(BaseTrainer, EvalInst):
                     '''merge nodes'''
                     merged_idx2oid = dict()
                     merged_oid2idx = dict()
-
                     for idx in range(len(inst_oids)):
+                        print(seg_oid2idx)
                         oid = inst_oids[idx]
                         # merge predictions
                         if not ignore_missing:
@@ -466,12 +466,13 @@ class Trainer_SGFN(BaseTrainer, EvalInst):
                                 # Weighted Sum
                                 if idx not in predictions_weights['node']:
                                     predictions_weights['node'][idx] = 0
+
                                 merged_node_cls[idx, inst_valid_node_cls_indices] = \
                                     (merged_node_cls[idx, inst_valid_node_cls_indices] * predictions_weights['node'][idx] +
                                         node_cls_pred[seg_valid_node_cls_indices]
                                      ) / (predictions_weights['node'][idx]+1)
                                 predictions_weights['node'][idx] += 1
-
+                                print(redictions_weights['node'][idx])
                             else:
                                 assert noneidx_node_cls is not None
                                 # Only do this in the last estimation
@@ -764,7 +765,6 @@ class Trainer_SGFN(BaseTrainer, EvalInst):
                         # inst_gt_pairs.add((src_inst_idx, tgt_inst_idx))
 
                     return node_pds, edge_pds, tock-tick
-
                 if isinstance(batch_data, list):
                     for idx, data in enumerate(batch_data):
                         fid = data['fid']
@@ -773,7 +773,6 @@ class Trainer_SGFN(BaseTrainer, EvalInst):
                         if pt > 0:
                             acc_time += pt
                             timer_counter += 1
-
                             fuse(nodes_pds_all, nodes_w, node_pds)
                             fuse(edges_pds_all, edges_w, edge_pds)
 

@@ -14,14 +14,17 @@ model:
  image_encoder:
   method: none #[none,mvcnn,mean]
  gnn:
-  # method: fan #segnn # [none, fan, triplet]
-  method: fan # [none, fan, triplet]
+  method: esgnn #esgnn # [none, fan, triplet]
   hidden_dim: 256
-  num_layers: 2
+  num_layers: 1
   num_heads: 8
   drop_out: 0.3
   node_from_gnn: true
+  with_x: false
+  with_fan: true
+  fan2_gcl1: false
 data:
  load_images: false # remember change it to 'false' as default
  load_points: true
  full_edge: false # connect all selected nodes
+

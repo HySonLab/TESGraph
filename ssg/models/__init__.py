@@ -19,6 +19,7 @@ gnn_list = {
     'imp': TripletIMP,
     'vgfm': TripletVGfM,
     'jointgnn': JointGNN,
-    'segnn': EGNN,
-    'jointsegnn': JointEGNN
+    'esgnn': EGNN,
+    'eqgnn': EQGNN,
+    #'jointsegnn': JointEGNN
 }

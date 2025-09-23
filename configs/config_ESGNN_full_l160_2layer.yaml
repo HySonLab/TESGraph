@@ -1,0 +1,18 @@
+inherit_from: [configs/dataset/config_base_3RScan_full_l160.yaml,configs/method/config_base_ESGNN.yaml]
+model:
+ multi_rel: true #true # multiple relationship 
+ gnn:
+  num_layers: 2
+wandb:
+ dry_run: false
+ name: 'ESGNN'
+ id: 1415
+ entity: 'quangpham200602'
+ project: "ESGNN_l160_mbzuai"
+ tags: ["ssg", "esgnn",'full','l160']
+ dir: logs/
+data:
+ load_cache: false
+training:
+ batch: 1
+ data_workers: 8

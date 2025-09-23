@@ -14,29 +14,31 @@ from .models.classifier import PointNetCls, PointNetRelClsMulti, PointNetRelCls
 from codeLib.utils.util import pytorch_count_params
 import logging
 logger_py = logging.getLogger(__name__)
+from termcolor import cprint
 
-
-class SGFN(nn.Module):
+class ESGNN(nn.Module):
     def __init__(self, cfg, num_obj_cls, num_rel_cls, device):
         super().__init__()
         self.cfg = cfg
-        self._device = device
-        self.with_img_encoder = self.cfg.model.image_encoder.method != 'none'
-        self.with_pts_encoder = self.cfg.model.node_encoder.method != 'none'
-        node_feature_dim = cfg.model.node_feature_dim
-        edge_feature_dim = cfg.model.edge_feature_dim
-
+        self._device = device #cuda
+        self.with_img_encoder = self.cfg.model.image_encoder.method != 'none' #False 
+        self.with_pts_encoder = self.cfg.model.node_encoder.method != 'none' #True 
+        
+        node_feature_dim = cfg.model.node_feature_dim #256
+        edge_feature_dim = cfg.model.edge_feature_dim #256
+   
         if self.with_img_encoder and self.with_pts_encoder:
             raise NotImplementedError("")
 
-        self.use_spatial = use_spatial = self.cfg.model.spatial_encoder.method != 'none'
+        self.use_spatial = use_spatial = self.cfg.model.spatial_encoder.method != 'none' #True
+        
         sptial_feature_dim = 0
         if use_spatial:
             if self.with_pts_encoder:
-                # # ignore centroid (11-3=8)
-                sptial_feature_dim = 8
+                # # ignore centroid (1 1-3=8)
+                sptial_feature_dim =8
                 node_feature_dim -= sptial_feature_dim
-                cfg.model.node_feature_dim = node_feature_dim
+                cfg.model.node_feature_dim = node_feature_dim 
             if self.with_img_encoder:
                 sptial_feature_dim = 6
                 # sptial_feature_dim = 0
@@ -46,6 +48,7 @@ class SGFN(nn.Module):
         models = dict()
         '''point encoder'''
         if self.with_pts_encoder:
+            cprint("Point encoder is being used", "green")
             if self.cfg.model.node_encoder.method == 'basic':
                 models['obj_encoder'] = ssg.models.node_encoder_list['sgfn'](
                     cfg, device)
@@ -55,6 +58,7 @@ class SGFN(nn.Module):
 
         '''image encoder'''
         if self.with_img_encoder:
+            cprint("Image encoder is being used", "green")
             img_encoder_method = self.cfg.model.image_encoder.method
             if img_encoder_method == 'cvr':
                 logger_py.info('use CVR original implementation')
@@ -110,12 +114,13 @@ class SGFN(nn.Module):
         '''edge encoder'''
         if self.cfg.model.edge_encoder.method == 'basic':
             models['rel_encoder'] = ssg.models.edge_encoder_list['sgfn'](
-                cfg, device)
+                cfg, device)   
         else:
             models['rel_encoder'] = ssg.models.edge_encoder_list[self.cfg.model.edge_encoder.method](
                 cfg, device)
 
         if use_spatial:
+            cprint("Spatial encoder is being used", "green")
             if self.cfg.model.spatial_encoder.method == 'fc':
                 models['spatial_encoder'] = torch.nn.Linear(
                     sptial_feature_dim, cfg.model.spatial_encoder.dim)
@@ -128,9 +133,8 @@ class SGFN(nn.Module):
         else:
             models['spatial_encoder'] = torch.nn.Identity()
             node_feature_dim += sptial_feature_dim
-
+        ###------------------------------------------------------------
         cfg.model.node_feature_dim = node_feature_dim
-
         if cfg.model.gnn.method != 'none':
             models['gnn'] = ssg.models.gnn_list[cfg.model.gnn.method](
                 dim_node=cfg.model.node_feature_dim,
@@ -140,7 +144,10 @@ class SGFN(nn.Module):
                 num_heads=cfg.model.gnn.num_heads,
                 aggr='max',
                 DROP_OUT_ATTEN=cfg.model.gnn.drop_out,
-                use_bn=False
+                use_bn=False,
+                with_x=cfg.model.gnn.with_x,
+                with_fan=cfg.model.gnn.with_fan,
+                fan2_gcl1=cfg.model.gnn.fan2_gcl1,
             )
 
         '''build classifier'''
@@ -179,18 +186,19 @@ class SGFN(nn.Module):
                                                   batch_norm=with_bn, drop_out=cfg.model.node_classifier.dropout)
 
         if cfg.model.multi_rel:
+            cprint("Multi_relationship is seted", 'green')
             models['rel_predictor'] = PointNetRelClsMulti(
                 num_rel_cls,
                 in_size=edge_feature_dim,
                 batch_norm=with_bn, drop_out=True)
-        else:
+        else: 
             models['rel_predictor'] = PointNetRelCls(
                 num_rel_cls,
                 in_size=edge_feature_dim,
                 batch_norm=with_bn, drop_out=True)
 
         params = list()
-        print('==trainable parameters==')
+        cprint('==trainable parameters==', "cyan")
         for name, model in models.items():
             if model is None:
                 self.name = model
@@ -216,12 +224,13 @@ class SGFN(nn.Module):
         '''compute node feature'''
         # from points
         if self.with_pts_encoder:
-            data['node'].x = self.obj_encoder(data['node'].pts)
+            data['node'].x = self.obj_encoder(data['node'].pts) ### Output 248 after pointnet encoder
         # from imgae
         if self.with_img_encoder:
             img_dict = self.img_encoder(
                 data['roi'].img, edge_index=data['roi', 'sees', 'node'].edge_index)
             data['node'].x = img_dict['nodes_feature']
+            
         # froms spatial descriptor
         if self.use_spatial:
             if self.with_pts_encoder:
@@ -254,12 +263,24 @@ class SGFN(nn.Module):
             node_feature_ori = None
             if not self.cfg.model.gnn.node_from_gnn:
                 node_feature_ori = data['node'].x
-            if hasattr(self, 'gnn') and self.gnn is not None:
-                gnn_nodes_feature, gnn_edges_feature, probs = \
-                    self.gnn(data)
 
-                data['node'].x = gnn_nodes_feature
-                data['node', 'to', 'node'].x = gnn_edges_feature
+            if hasattr(self, 'gnn') and self.gnn is not None:
+                if self.cfg.model.gnn.method == 'fan': #for sgfn
+                    gnn_nodes_feature, gnn_edges_feature, probs = self.gnn(data)
+                    data['node'].x = gnn_nodes_feature
+                    data['node', 'to', 'node'].x = gnn_edges_feature
+                    
+                elif self.cfg.model.gnn.method == 'esgnn': #for esgnn
+                    h, x, a = self.gnn(data)
+                    data['node'].x = h
+                    data['coord'].x = x
+                    data['node', 'to', 'node'].x = a
+                    
+                elif self.cfg.model.gnn.method == 'eqgnn': # for equiformer
+                    h, x = self.gnn(data)
+                    data['node'].x = h
+                    data['coord'].x = x
+                
             if not self.cfg.model.gnn.node_from_gnn:
                 data['node'].x = node_feature_ori
         '''Classification'''
@@ -268,9 +289,11 @@ class SGFN(nn.Module):
         # Edge
         if has_edge:
             edge_cls = self.rel_predictor(data['node', 'to', 'node'].x)
+            return node_cls, edge_cls, data['node'].x, data['node', 'to', 'node'].x
         else:
             edge_cls = None
-        return node_cls, edge_cls
+            return node_cls, edge_cls, data['node'].x, None
+        
 
     def calculate_metrics(self, **args):
         outputs = {}
@@ -303,7 +326,7 @@ class SGFN(nn.Module):
         if not os.path.exists(path):
             os.makedirs(path)
         self.eval()
-        print('the traced model will be saved at', path)
+        cprint(f'the traced model will be saved at {path}', "cyan")
 
         params = dict()
         if self.with_pts_encoder:

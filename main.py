@@ -7,6 +7,7 @@ from ssg.checkpoints import CheckpointIO
 import cProfile
 import matplotlib
 import torch_geometric
+import torch
 
 # disable GUI
 matplotlib.pyplot.switch_backend('agg')
@@ -16,9 +17,9 @@ logging.getLogger('PIL').setLevel('CRITICAL')
 logging.getLogger('trimesh').setLevel('CRITICAL')
 logging.getLogger("h5py").setLevel(logging.INFO)
 logger_py = logging.getLogger(__name__)
-
-
+    
 def main():
+    
     cfg = ssg.Parse()
 
     # Shorthands
@@ -43,27 +44,31 @@ def main():
         ''' create dataset and loaders '''
         logger_py.info('get dataset')
         dataset_train = config.get_dataset(cfg, 'train')
-        dataset_val = config.get_dataset(cfg, 'validation')
+        dataset_val = config.get_dataset(cfg, 'test') # validation
+
+        #print(dataset)
 
         logger_py.info('create loader')
         train_loader = torch_geometric.loader.DataLoader(
             dataset_train,
             batch_size=cfg.training.batch,
             num_workers=n_workers,
-            pin_memory=True
+            pin_memory=True,
+            # pin_memory_device=str(cfg.DEVICE)
         )
         val_loader = torch_geometric.loader.DataLoader(
             dataset_val, batch_size=1, num_workers=n_workers,
             shuffle=False,
             drop_last=False,
-            pin_memory=False,
+            pin_memory=True,
+            # pin_memory_device=str(cfg.DEVICE)
         )
 
         # try to load one data
         logger_py.info('test loader')
-        for i, data in enumerate(train_loader):
-            break
-            continue
+        # for i, data in enumerate(train_loader):
+        #     break
+        #     continue
 
         # Get logger
         logger_py.info('get logger')
@@ -81,11 +86,12 @@ def main():
 
         model = config.get_model(
             cfg, num_obj_cls=num_obj_cls, num_rel_cls=num_rel_cls)
-
-        if cfg.VERBOSE:
-            print(cfg)
-        if cfg.VERBOSE:
-            print(model)
+        
+        
+        # if cfg.VERBOSE:
+        #     print(cfg)
+        # if cfg.VERBOSE:
+        #     print(model)
 
         # trainer
         logger_py.info('get trainner')
@@ -110,15 +116,20 @@ def main():
         logger_py.info('traning finished')
         logger_py.info('save time profile to {}'.format(
             os.path.join(out_dir, 'tp_train.dmp')))
-        pr.dump_stats(os.path.join(out_dir, 'tp_train.dmp'))    
+        pr.dump_stats(os.path.join(out_dir, 'tp_train.dmp'))   
+         
     elif cfg.MODE == 'eval':
+        print("SAVED MODEL NAME:", cfg.SAVED_MODEL_NAME)
         '''use CPU for memory issue'''
-        import torch
         cfg.DEVICE = torch.device("cpu")
-
-        cfg.data.load_cache = False
+        #cfg.data.load_cache = False
         eval_mode = cfg.eval.mode
+        
+        # print(cfg)
         assert eval_mode in ['segment', 'instance']
+        print("EVAL MODE:", eval_mode)
+        pretrained_path = '/home/quang.pham/3DSSG/experiments/ESGNN_full_l160/esgnn_1_dropout0.3_best.pt'
+
         if eval_mode == 'segment':
             dataset_test = config.get_dataset(cfg, 'test')
             val_loader = torch_geometric.loader.DataLoader(
@@ -126,12 +137,11 @@ def main():
                 shuffle=False, drop_last=False,
                 pin_memory=False,
             )
-            #print(dataset_test) #chi lan
             logger_py.info('test loader')
             dataset_test.__getitem__(0)
-            for i, data in enumerate(train_loader):
-                break
-                continue
+            # for i, data in enumerate(train_loader):
+            #     break
+            #     continue
 
             # Get logger
             logger = config.get_logger(cfg)
@@ -144,7 +154,7 @@ def main():
             num_obj_cls = len(dataset_test.classNames)
             num_rel_cls = len(
                 dataset_test.relationNames) if relationNames is not None else 0
-
+            
             model = config.get_model(
                 cfg, num_obj_cls=num_obj_cls, num_rel_cls=num_rel_cls)
 
@@ -154,7 +164,9 @@ def main():
                                                )
 
             checkpoint_io = CheckpointIO(out_dir, model=model)
-            load_dict = checkpoint_io.load('model_best.pt', device=cfg.DEVICE)
+            load_dict = checkpoint_io.load(pretrained_path, device=cfg.DEVICE)
+            #load_dict = checkpoint_io.load(f'{cfg.SAVED_MODEL_NAME}_best_138.pt', device=cfg.DEVICE)
+            #load_dict = checkpoint_io.load(f'{cfg.SAVED_MODEL_NAME}_latest.pt', device=cfg.DEVICE)
             it = load_dict.get('it', -1)
 
             #
@@ -162,7 +174,7 @@ def main():
             pr = cProfile.Profile()
             pr.enable()
             eval_dict, eval_tool = model_trainer.evaluate(
-                val_loader, topk=cfg.eval.topK)
+                val_loader, topk= cfg.eval.topK)
             pr.disable()
             logger_py.info('save time profile to {}'.format(
                 os.path.join(out_dir, 'tp_eval.dmp')))
@@ -181,21 +193,20 @@ def main():
                     logger.add_scalar('test/%s' % k, v, it)
         elif eval_mode == 'instance':
             ''' Get segment dataset '''
-            dataset_seg = config.get_dataset(cfg, 'test')
+            dataset_seg = config.get_dataset(cfg, 'test') #'test'
             ''' Get instance dataset'''
-            dataset_inst = config.get_dataset_inst(cfg, 'test')
+            dataset_inst = config.get_dataset_inst(cfg, 'test')  #'test'
 
             logger_py.info('test loader')
             dataset_inst.__getitem__(0)
             for i in range(len(dataset_inst)):
                 dataset_inst.__getitem__(i)
                 break
-                continue
 
             '''check'''
             # assert len(dataset_seg.relationNames) == len(dataset_inst.relationNames)+1
             assert len(dataset_seg.classNames) == len(dataset_inst.classNames)
-
+            print(len(dataset_seg.classNames))
             ''' Get logger '''
             logger = config.get_logger(cfg)
             if logger is not None:
@@ -208,6 +219,204 @@ def main():
             num_rel_cls = len(
                 dataset_seg.relationNames) if relationNames is not None else 0
 
+            # print("Creating model")
+            # print(dataset_inst)
+            # print(dataset_seg)
+            model = config.get_model(
+                cfg, num_obj_cls=num_obj_cls, num_rel_cls=num_rel_cls)
+
+            model_trainer = config.get_trainer(cfg, model, classNames, relationNames,
+                                               w_node_cls=None, 
+                                               w_edge_cls=None
+                                               )
+            '''check ckpt'''
+            checkpoint_io = CheckpointIO(out_dir, model=model)
+            #load_dict = checkpoint_io.load(pretrained_path, device=cfg.DEVICE)
+            load_dict = checkpoint_io.load(f'{cfg.SAVED_MODEL_NAME}_best_138.pt', device=cfg.DEVICE)
+            #load_dict = checkpoint_io.load(f'{cfg.SAVED_MODEL_NAME}_latest.pt', device=cfg.DEVICE)
+            it = load_dict.get('it', -1)
+
+            '''start eval'''
+            logger_py.info('start evaluation')
+            pr = cProfile.Profile()
+            pr.enable()
+            eval_dict, eval_tools, eval_tool_upperbound = model_trainer.evaluate_inst(
+                dataset_seg, dataset_inst, topk=cfg.eval.topK)
+            pr.disable()
+            logger_py.info('save time profile to {}'.format(
+                os.path.join(out_dir, 'tp_eval_inst.dmp')))
+            pr.dump_stats(os.path.join(out_dir, 'tp_eval_inst.dmp'))
+
+            '''log'''
+            # ignore_missing=cfg.eval.ignore_missing
+            prefix = 'inst' if not cfg.eval.ignore_missing else 'inst_ignore'
+
+            eval_tool_upperbound.write(out_dir, 'upper_bound')
+
+            for eval_type, eval_tool in eval_tools.items():
+                print('======={}======'.format(eval_type))
+                print(eval_tool.gen_text())
+                _ = eval_tool.write(out_dir, eval_type+'_'+prefix)
+
+            if logger:
+                for k, v in eval_dict['visualization'].items():
+                    logger.add_figure('test/'+prefix+'_'+k, v, global_step=it)
+                for k, v in eval_dict.items():
+                    if isinstance(v, dict):
+                        continue
+                    logger.add_scalar('test/'+prefix+'_'+'%s' % k, v, it)
+    # elif cfg.MODE == 'eval_recall':  #under developing
+    #     print("SAVED MODEL NAME:", cfg.SAVED_MODEL_NAME)
+    #     '''use CPU for memory issue'''
+    #     # cfg.DEVICE = torch.device("cpu")
+    #     import torch
+    #     cfg.DEVICE = torch.device("cpu")
+    #     cfg.data.load_cache = False
+    #     eval_mode = cfg.eval.mode
+        
+
+        
+    #     # print(cfg)
+    #     assert eval_mode in ['instance', 'segment']
+    #     if eval_mode == 'segment':
+    #         ''' Get segment dataset '''
+    #         dataset_seg = config.get_dataset(cfg, 'test') #'test'
+    #         ''' Get instance dataset'''
+    #         dataset_inst = config.get_dataset_inst(cfg, 'test')  #'test'
+
+    #         logger_py.info('test loader')
+    #         dataset_inst.__getitem__(0)
+    #         for i in range(len(dataset_inst)):
+    #             dataset_inst.__getitem__(i)
+    #             break
+    #             continue
+
+    #         '''check'''
+    #         # assert len(dataset_seg.relationNames) == len(dataset_inst.relationNames)+1
+    #         assert len(dataset_seg.classNames) == len(dataset_inst.classNames)
+    #         print(len(dataset_seg.classNames))
+    #         ''' Get logger '''
+    #         logger = config.get_logger(cfg)
+    #         if logger is not None:
+    #             logger, _ = logger
+
+    #         ''' Create model '''
+    #         relationNames = dataset_seg.relationNames
+    #         classNames = dataset_seg.classNames
+    #         num_obj_cls = len(dataset_seg.classNames)
+    #         num_rel_cls = len(
+    #             dataset_seg.relationNames) if relationNames is not None else 0
+
+    #         # print("Creating model")
+    #         # print(dataset_inst)
+    #         # print(dataset_seg)
+    #         model = config.get_model(
+    #             cfg, num_obj_cls=num_obj_cls, num_rel_cls=num_rel_cls)
+
+    #         model_trainer = config.get_trainer(cfg, model, classNames, relationNames,
+    #                                            w_node_cls=None, 
+    #                                            w_edge_cls=None
+    #                                            )
+    #         '''check ckpt'''
+    #         checkpoint_io = CheckpointIO(out_dir, model=model)
+    #         load_dict = checkpoint_io.load('pretrained_SGFN_best.pt', device=cfg.DEVICE)
+    #         print(f'TEST_{cfg.SAVED_MODEL_NAME}_best.pt')
+    #         #load_dict = checkpoint_io.load(f'TEST_{cfg.SAVED_MODEL_NAME}_best.pt', device=cfg.DEVICE)
+    #         # load_dict = checkpoint_io.load(f'/home/ubuntu/20quang.ppm/3DSSG_HIHI/3DSSG/experiments/SGFN_full_l20/segnn_layers_2_withFAN_best.pt', device=cfg.DEVICE)
+    #         # load_dict = checkpoint_io.load(f'/home/ubuntu/20quang.ppm/3DSSG_HIHI/3DSSG/experiments/pretrained_SGFN/SGFN_full_l20/model.pt', device=cfg.DEVICE)
+    #         #load_dict = checkpoint_io.load(f'/home/ubuntu/20quang.ppm/3DSSG_HIHI/3DSSG/experiments/SGFN_full_l20/fan_layers_2_best.pt', device=cfg.DEVICE)
+            
+    #         it = load_dict.get('it', -1)
+    #         # print(it)
+    #         val_loader = torch_geometric.loader.DataLoader(
+    #             dataset_seg, batch_size=1, num_workers=4,
+    #             shuffle=False,
+    #             drop_last=False,
+    #             # pin_memory=True,
+    #             # pin_memory_device=str(cfg.DEVICE)
+    #         )
+    #         # val_loader = args['val_loader']
+    #         trainer = ssg.Trainer(
+    #             cfg=cfg,
+    #             model_trainer=model_trainer,
+    #             node_cls_names=classNames,
+    #             edge_cls_names=relationNames,
+    #             logger=logger,
+    #             )
+    #         '''start eval'''  #Sua tu day
+    #         logger_py.info('start evaluation')
+    #         pr = cProfile.Profile()
+    #         pr.enable()
+
+
+
+    #         # eval_dict = trainer.run_validation(val_loader=val_loader, logger = logger, epoch_it = 0, it = it, eval = True)
+    #         # print(eval_dict)
+            
+            
+    #         eval_dict, eval_tools, eval_tool_upperbound = model_trainer.evaluate_inst_recall(
+    #             dataset_seg, dataset_inst, topk=cfg.eval.topK)
+    #         pr.disable()
+    #         # logger_py.info('save time profile to {}'.format(
+    #         #     os.path.join(out_dir, 'tp_eval_inst.dmp')))
+    #         # pr.dump_stats(os.path.join(out_dir, 'tp_eval_inst.dmp'))
+
+    #         # '''log'''
+    #         # # ignore_missing=cfg.eval.ignore_missing
+    #         # prefix = 'inst' if not cfg.eval.ignore_missing else 'inst_ignore'
+
+    #         # eval_tool_upperbound.write(out_dir, 'upper_bound')
+
+    #         # for eval_type, eval_tool in eval_tools.items():
+    #         #     print('======={}======'.format(eval_type))
+    #         #     print(eval_tool.gen_text())
+    #         #     _ = eval_tool.write(out_dir, eval_type+'_'+prefix)
+
+    #         # if logger:
+    #         #     for k, v in eval_dict['visualization'].items():
+    #         #         logger.add_figure('test/'+prefix+'_'+k, v, global_step=it)
+    #         #     for k, v in eval_dict.items():
+    #         #         if isinstance(v, dict):
+    #         #             continue
+    #         #         logger.add_scalar('test/'+prefix+'_'+'%s' % k, v, it)
+    elif cfg.MODE == 'interference':
+        print("SAVED MODEL NAME:", cfg.SAVED_MODEL_NAME)
+        '''use CPU for memory issue'''
+        cfg.DEVICE = torch.device("cpu")
+        # cfg.DEVICE = torch.device("cuda")
+        #cfg.data.load_cache = False
+        eval_mode = cfg.eval.mode
+        
+        # print(cfg)
+        assert eval_mode in ['segment', 'instance']
+        print("EVAL MODE:", eval_mode)
+        pretrained_path = '/home/quang.pham/3DSSG/experiments/SGFN_full_l20/esgnn_2X_best.pt'
+
+        if eval_mode == 'segment':
+            dataset_test = config.get_dataset(cfg, 'train')
+            val_loader = torch_geometric.loader.DataLoader(
+                dataset_test, batch_size=1, num_workers=cfg['eval']['data_workers'],
+                shuffle=False, drop_last=False,
+                pin_memory=False,
+            )
+            logger_py.info('test loader')
+            dataset_test.__getitem__(0)
+            # for i, data in enumerate(train_loader):
+            #     break
+            #     continue
+
+            # Get logger
+            logger = config.get_logger(cfg)
+            if logger is not None:
+                logger, _ = logger
+
+            ''' Create model '''
+            relationNames = dataset_test.relationNames
+            classNames = dataset_test.classNames
+            num_obj_cls = len(dataset_test.classNames)
+            num_rel_cls = len(
+                dataset_test.relationNames) if relationNames is not None else 0
+            
             model = config.get_model(
                 cfg, num_obj_cls=num_obj_cls, num_rel_cls=num_rel_cls)
 
@@ -215,9 +424,79 @@ def main():
                                                w_node_cls=None,
                                                w_edge_cls=None
                                                )
+
+            checkpoint_io = CheckpointIO(out_dir, model=model)
+            load_dict = checkpoint_io.load(pretrained_path, device=cfg.DEVICE)
+            #load_dict = checkpoint_io.load(f'{cfg.SAVED_MODEL_NAME}_best_138.pt', device=cfg.DEVICE)
+            #load_dict = checkpoint_io.load(f'{cfg.SAVED_MODEL_NAME}_latest.pt', device=cfg.DEVICE)
+            it = load_dict.get('it', -1)
+
+            #
+            logger_py.info('start evaluation')
+            pr = cProfile.Profile()
+            pr.enable()
+            eval_dict, eval_tool = model_trainer.evaluate(
+                val_loader, topk= cfg.eval.topK)
+            pr.disable()
+            logger_py.info('save time profile to {}'.format(
+                os.path.join(out_dir, 'tp_eval.dmp')))
+            pr.dump_stats(os.path.join(out_dir, 'tp_eval.dmp'))
+
+            #
+            print(eval_tool.gen_text())
+            _ = eval_tool.write(out_dir, cfg.name)
+
+            if logger:
+                for k, v in eval_dict['visualization'].items():
+                    logger.add_figure('test/'+k, v, global_step=it)
+                for k, v in eval_dict.items():
+                    if isinstance(v, dict):
+                        continue
+                    logger.add_scalar('test/%s' % k, v, it)
+                    
+        elif eval_mode == 'instance':
+            ''' Get segment dataset '''
+            dataset_seg = config.get_dataset(cfg, 'test') #'test'
+            ''' Get instance dataset'''
+            dataset_inst = config.get_dataset_inst(cfg, 'test')  #'test'
+
+            logger_py.info('test loader')
+            dataset_inst.__getitem__(0)
+            for i in range(len(dataset_inst)):
+                dataset_inst.__getitem__(i)
+                break
+
+            '''check'''
+            # assert len(dataset_seg.relationNames) == len(dataset_inst.relationNames)+1
+            assert len(dataset_seg.classNames) == len(dataset_inst.classNames)
+            print(len(dataset_seg.classNames))
+            ''' Get logger '''
+            logger = config.get_logger(cfg)
+            if logger is not None:
+                logger, _ = logger
+
+            ''' Create model '''
+            relationNames = dataset_seg.relationNames
+            classNames = dataset_seg.classNames
+            num_obj_cls = len(dataset_seg.classNames)
+            num_rel_cls = len(
+                dataset_seg.relationNames) if relationNames is not None else 0
+
+            # print("Creating model")
+            # print(dataset_inst)
+            # print(dataset_seg)
+            model = config.get_model(
+                cfg, num_obj_cls=num_obj_cls, num_rel_cls=num_rel_cls)
+
+            model_trainer = config.get_trainer(cfg, model, classNames, relationNames,
+                                               w_node_cls=None, 
+                                               w_edge_cls=None
+                                               )
             '''check ckpt'''
             checkpoint_io = CheckpointIO(out_dir, model=model)
-            load_dict = checkpoint_io.load('model_best.pt', device=cfg.DEVICE)
+            #load_dict = checkpoint_io.load(pretrained_path, device=cfg.DEVICE)
+            load_dict = checkpoint_io.load(f'{cfg.SAVED_MODEL_NAME}_best.pt', device=cfg.DEVICE)
+            #load_dict = checkpoint_io.load(f'{cfg.SAVED_MODEL_NAME}_latest.pt', device=cfg.DEVICE)
             it = load_dict.get('it', -1)
 
             '''start eval'''

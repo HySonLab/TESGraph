@@ -4,7 +4,7 @@ import torch
 from torch.utils import model_zoo
 import shutil
 import datetime
-
+from termcolor import cprint
 
 class CheckpointIO(object):
     ''' CheckpointIO class.
@@ -74,14 +74,14 @@ class CheckpointIO(object):
             filename = os.path.join(self.checkpoint_dir, filename)
 
         if os.path.exists(filename):
-            print(filename)
-            print('=> Loading checkpoint from local file...')
+            cprint(f"Checkpoint {filename} exists", "yellow", end=' ')  # print(filename)
+            cprint('=> Loading checkpoint from local file...', "yellow")
             state_dict = torch.load(
                 filename, map_location=torch.device(device))
             scalars = self.parse_state_dict(state_dict)
             return scalars
         else:
-            print(filename)
+            cprint(f"Checkpoint {filename} does not exist", "yellow", end=' ')  # print(filename)
             raise FileExistsError
 
     def load_url(self, url, device):
@@ -93,8 +93,8 @@ class CheckpointIO(object):
         download_path = os.path.join(
             self.checkpoint_dir, os.path.basename(url))
         if not os.path.exists(download_path):
-            print(url)
-            print('=> Loading checkpoint from url...')
+            cprint(f"Checkpoint {url} does not exist", "yellow", end=' ')  # print(url)
+            cprint('=> Loading checkpoint from url...')
             state_dict = model_zoo.load_url(url, progress=False, map_location=torch.device(
                 device), model_dir=self.checkpoint_dir)
             scalars = self.parse_state_dict(state_dict)
@@ -113,7 +113,7 @@ class CheckpointIO(object):
             if k in state_dict:
                 v.load_state_dict(state_dict[k])
             else:
-                print('Warning: Could not find %s in checkpoint!' % k)
+                cprint('Warning: Could not find %s in checkpoint!' % k, "red")
         
         scalars = {k: v for k, v in state_dict.items()
                    if k not in self.module_dict}

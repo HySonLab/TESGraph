@@ -1505,7 +1505,7 @@ class EvalSceneGraphBase():
                 txt += "top-k R@{}\t {}".format(k, R)+'\n'
             txt += str(len(self.top_k_triplet_recall)) + '\n'
 
-            txt += 'Mew Recall@k for objects: \n'
+            txt += 'New Recall@k for objects: \n'
             ntop_k_obj = np.asarray(self.top_k_obj_recall)
             ks = set([1, 2, 3, 4, 5, 10, 50, 100])
             for i in [0, 0.05, 0.1, 0.2, 0.5]:
@@ -1630,7 +1630,8 @@ class EvalSceneGraphBatch(EvalSceneGraphBase):
         rel_pds: [m,n_cls]: torch.sigmoid(x) if multi_rel_threshold>0 else softmax
         rel_gts: [m,n_cls] if multi_rel_threshold>0 else [m,1]
         '''
-
+        # print(data['node_gt'])
+        # print(data['node'].y)
         node_data = data['node']
         edge_data = data['node', 'to', 'node']
         node_gt_data = data['node_gt']
@@ -1661,6 +1662,7 @@ class EvalSceneGraphBatch(EvalSceneGraphBase):
 
         # Obj
         o_pds = node_pds.max(1)[1]
+        # print(o_pds)
         self.eva_o_cls(o_pds, node_gts)
 
         # Rel

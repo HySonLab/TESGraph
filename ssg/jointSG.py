@@ -217,7 +217,7 @@ class JointSG(nn.Module):
             ''' GNN '''
             probs=None
             if hasattr(self, 'gnn') and self.gnn is not None:
-                gnn_nodes_feature, gnn_edges_feature = self.gnn(data) #, probs
+                gnn_nodes_feature, gnn_edges_feature, probs = self.gnn(data)
                 data['node'].x = gnn_nodes_feature
                 data['node','to','node'].x = gnn_edges_feature
         

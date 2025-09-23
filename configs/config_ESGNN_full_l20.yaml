@@ -2,4 +2,4 @@ inherit_from: [configs/dataset/config_base_3RScan_full_l20.yaml,configs/method/c
 model:
  multi_rel: false # multiple relationship 
 wandb:
- tags: ["ssg", "sgfn","full","l19"]
+ tags: ["ssg", "sgfn","full","l20"]

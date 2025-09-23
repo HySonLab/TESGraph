@@ -101,7 +101,7 @@ class E_GCL(nn.Module):
         coord = self.coord_model(coord, edge_index, coord_diff, edge_feat)
         h, agg = self.node_model(h, edge_index, edge_feat, node_attr)
 
-        return h, coord, edge_attr, edge_feat
+        return h, coord, edge_attr, edge_feat #edge_feat
 
 def unsorted_segment_sum(data, segment_ids, num_segments):
     result_shape = (num_segments, data.size(1))

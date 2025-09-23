@@ -19,7 +19,11 @@ from copy import deepcopy
 from torch_scatter import scatter
 from codeLib.common import filter_args_create
 import ssg
-from .equiv_models.EGCL import E_GCL
+from .EGCL import E_GCL
+from .Temporal_graph import EvolveGCNO 
+
+
+
 
 class TripletGCN(MessagePassing):
     def __init__(self, dim_node, dim_edge, dim_hidden, aggr='mean', with_bn=True):
@@ -390,7 +394,7 @@ class JointGNN(torch.nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
         self.with_geo = kwargs['with_geo']
-        self.num_layers = kwargs['num_layers'] //2
+        self.num_layers = kwargs['num_layers']
         self.num_heads = kwargs['num_heads']
         dim_node = kwargs['dim_node']
         dim_edge = kwargs['dim_edge']
@@ -472,98 +476,96 @@ class JointGNN(torch.nn.Module):
                 probs.append(None)
         return node, edge, probs
 
-#class JointEGNN(torch.nn.Module):
-    # def __init__(self, **kwargs):
-    #     super(JointEGNN, self).__init__()
-    #     self.with_geo = kwargs['with_geo']
-    #     self.num_layers = kwargs['num_layers'] //2
-    #     self.num_heads = kwargs['num_heads']
-    #     dim_node = kwargs['dim_node']
-    #     dim_edge = kwargs['dim_edge']
-    #     drop_out_p = kwargs['drop_out']
-    #     self.gconvs = torch.nn.ModuleList()
+class JointEGNN(torch.nn.Module):
+    def __init__(self, **kwargs):
+        super(JointEGNN, self).__init__()
+        self.with_geo = kwargs['with_geo']
+        self.num_layers = kwargs['num_layers']
+        self.num_heads = kwargs['num_heads']
+        dim_node = kwargs['dim_node']
+        dim_edge = kwargs['dim_edge']
+        drop_out_p = kwargs['drop_out']
+        self.gconvs = torch.nn.ModuleList()
 
-    #     # Get version
-    #     args_jointgnn = kwargs['jointgnn']
-    #     args_img_msg = kwargs[args_jointgnn['img_msg_method']]
+        # Get version
+        args_jointgnn = kwargs['jointgnn']
+        args_img_msg = kwargs[args_jointgnn['img_msg_method']]
 
-    #     gnn_modules = importlib.import_module(
-    #         'ssg.models.network_GNN').__dict__
-    #     # jointGNNModel = gnn_modules['JointGNN_{}'.format(args_jointgnn['version'].lower())]
-    #     img_model = gnn_modules[args_jointgnn['img_msg_method']]
-    #     self.msg_img = filter_args_create(
-    #         img_model, {**kwargs, **args_img_msg})
+        gnn_modules = importlib.import_module(
+            'ssg.models.network_GNN').__dict__
+        # jointGNNModel = gnn_modules['JointGNN_{}'.format(args_jointgnn['version'].lower())]
+        img_model = gnn_modules[args_jointgnn['img_msg_method']]
+        self.msg_img = filter_args_create(
+            img_model, {**kwargs, **args_img_msg})
 
-    #     # GRU
-    #     self.node_gru = nn.GRUCell(input_size=dim_node, hidden_size=dim_node)
-    #     self.edge_gru = nn.GRUCell(input_size=dim_edge, hidden_size=dim_edge)
+        # GRU
+        self.node_gru = nn.GRUCell(input_size=dim_node, hidden_size=dim_node)
+        self.edge_gru = nn.GRUCell(input_size=dim_edge, hidden_size=dim_edge)
 
-    #     # gate
-    #     if self.with_geo:
-    #         self.geo_gate = nn.Sequential(
-    #             nn.Linear(dim_node * 2, 1), nn.Sigmoid())
+        # gate
+        if self.with_geo:
+            self.geo_gate = nn.Sequential(
+                nn.Linear(dim_node * 2, 1), nn.Sigmoid())
 
-    #     self.drop_out = None
-    #     if drop_out_p > 0:
-    #         self.drop_out = torch.nn.Dropout(drop_out_p)
+        self.drop_out = None
+        if drop_out_p > 0:
+            self.drop_out = torch.nn.Dropout(drop_out_p)
 
-    #     # for _ in range(self.num_layers):
-    #     #     self.gconvs.append(jointGNNModel(**kwargs))
+        # for _ in range(self.num_layers):
+        #     self.gconvs.append(jointGNNModel(**kwargs))
 
-    #     for i in range(self.num_layers):
-    #         self.gconvs.append(filter_args_create(
-    #             MSG_FAN, {**kwargs, **kwargs['MSG_FAN']}))
+        for i in range(self.num_layers):
+            self.gconvs.append(filter_args_create(
+                MSG_FAN, {**kwargs, **kwargs['MSG_FAN']}))
             
-    #         self.add_module("gcl_%d" % i, E_GCL(dim_node, dim_node, dim_node, edges_in_d=dim_edge,
-    #                                 act_fn=nn.SiLU(), residual=True, attention=True,
-    #                                 normalize=False, tanh=False))
-    #         #self.add_module("fc_%d" % i, nn.Linear(dim_node, dim_edge))
-    #     self.edge_out = nn.Linear(dim_node, dim_edge)
-
-
-    # def forward(self, data):
-    #     probs = list()
-    #     h = data['node'].x #node
-    #     if self.with_geo:
-    #         geo_feature = data['geo_feature'].x
-    #     # image = data['roi'].x
-    #     edge_attr = data['node', 'to', 'node'].x #edge
-    #     edges = data['node', 'to', 'node'].edge_index #edge_index_node_2_node
-
-    #     # TODO: use GRU?
-    #     h = self.node_gru(h)
-    #     edge_attr = self.edge_gru(edge_attr)
-    #     for i in range(self.num_layers):
-    #         gconv = self.gconvs[i]
-
-    #         if self.with_geo:
-    #             geo_msg = self.geo_gate(torch.cat(
-    #                 (h, geo_feature), dim=1)) * torch.sigmoid(geo_feature)  # TODO:put the gate back
-    #             #geo_msg = self.geo_gate(torch.cat((node,geo_feature),dim=1)) * geo_feature
-    #             h += geo_msg
-
-    #         ## node, edge, prob = gconv(node,image,edge,edge_index_node_2_node,edge_index_image_2_ndoe)
-    #         node_msg, edge_msg, prob = gconv(
-    #             h, edge_attr, edges)
+            self.add_module("gcl_%d" % i, E_GCL(dim_node, dim_node, dim_node, edges_in_d=dim_edge,
+                                    act_fn=nn.SiLU(), residual=True, attention=True,
+                                    normalize=False, tanh=False))
             
-    #         #node_msg, edge_msg = h, edge_attr
+            #self.add_module("fc_%d" % i, nn.Linear(dim_node, dim_edge))
+        self.edge_out = nn.Linear(dim_node, dim_edge)
+        #self.node_in = nn.Linear(dim_node, dim_edge)
+        #self.node_out = nn.Linear(dim_edge, dim_node)
 
-    #         if i < (self.num_layers-1) or self.num_layers == 1:
-    #             node_msg = torch.nn.functional.relu(node_msg)
-    #             edge_msg = torch.nn.functional.relu(edge_msg)
+    def forward(self, data):
+        probs = list()
+        h = data['node'].x #node
+        if self.with_geo:
+            geo_feature = data['geo_feature'].x
+        # image = data['roi'].x
+        edge_attr = data['node', 'to', 'node'].x #edge
+        edges = data['node', 'to', 'node'].edge_index #edge_index_node_2_node
 
-    #             if self.drop_out:
-    #                 node_msg = self.drop_out(node_msg)
-    #                 edge_msg = self.drop_out(edge_msg)
+        # TODO: use GRU?
+        h = self.node_gru(h)
+        edge_attr = self.edge_gru(edge_attr)
+        for i in range(self.num_layers):
+            gconv = self.gconvs[i]
 
-    #         h = self.node_gru(node_msg, h)
-    #         edge_attr = self.edge_gru(edge_msg, edge_attr)
+            if self.with_geo:
+                geo_msg = self.geo_gate(torch.cat(
+                    (h, geo_feature), dim=1)) * torch.sigmoid(geo_feature)  # TODO:put the gate back
+                h += geo_msg
 
-    #         h, geo_feature, _, edge_feat = self._modules["gcl_%d" % i](h, edges, geo_feature, edge_attr=edge_attr)
-    #         #edge_attr = self._modules["fc_%d" % i](edge_feat)
-    #         edge_attr = self.edge_out(edge_feat)
+            node_msg, edge_msg, prob = gconv(
+                h, edge_attr, edges)
 
-    #     return h, edge_attr
+            if i < (self.num_layers-1) or self.num_layers == 1:
+                node_msg = torch.nn.functional.relu(node_msg)
+                edge_msg = torch.nn.functional.relu(edge_msg)
+
+                if self.drop_out:
+                    node_msg = self.drop_out(node_msg)
+                    edge_msg = self.drop_out(edge_msg)
+            
+            #h = self.node_in(h)
+            node_msg, geo_feature, _, edge_msg = self._modules["gcl_%d" % i](node_msg, edges, geo_feature, edge_attr=edge_msg)
+            #h = self.node_out(h)
+            edge_msg = self.edge_out(edge_msg)
+            h = self.node_gru(node_msg, h)
+            edge_attr = self.edge_gru(edge_msg, edge_attr)
+
+        return h, edge_attr
 
 class EGNN(nn.Module):
     # def __init__(self, in_node_nf, hidden_nf, out_node_nf, in_edge_nf=0, device='cpu', act_fn=nn.SiLU(), n_layers=4, residual=True, attention=False, normalize=False, tanh=False):
@@ -593,6 +595,20 @@ class EGNN(nn.Module):
         #{'dim_node': 256, 'dim_edge': 256, 'dim_atten': 256, 'num_layers': 2, 'num_heads': 8, 
         #'aggr': 'max', 'DROP_OUT_ATTEN': 0.3, 'use_bn': False}
 
+
+        # self.hidden_nf = hidden_nf
+        # self.device = device
+        # self.n_layers = n_layers
+        # self.embedding_in = nn.Linear(in_node_nf, self.hidden_nf)
+        # self.embedding_out = nn.Linear(self.hidden_nf, out_node_nf)
+
+        # for i in range(0, n_layers):
+        #     self.add_module("gcl_%d" % i, E_GCL(self.hidden_nf, self.hidden_nf, self.hidden_nf, edges_in_d=in_edge_nf,
+        #                                         act_fn=act_fn, residual=residual, attention=attention,
+        #                                         normalize=normalize, tanh=tanh))
+        # self.to(self.device)
+
+        #-------------------------------------------------
         self.num_layers = kwargs['num_layers']
         self.gconvs = torch.nn.ModuleList()
         self.drop_out = None
@@ -603,35 +619,26 @@ class EGNN(nn.Module):
 
         self.embedding_in = nn.Linear(kwargs['dim_node'], self.hidden_nf)
         self.embedding_out = nn.Linear(self.hidden_nf, kwargs['dim_node'])
-        self.with_x = kwargs['with_x']
-        self.with_fan = kwargs['with_fan']
-        self.fan2_gcl1 = kwargs['fan2_gcl1']
-        
-        '''print model special configs'''
-        print(f"Model with X: {self.with_x}")
-        print(f"Model with FAN: {self.with_fan}")
-        print(f"Drop out rate: {self.drop_out}")
-        
-        if self.with_x:
-            self.edge_embedding_out = nn.Linear(self.hidden_nf, kwargs['dim_node'] - 12)
             
-        if self.fan2_gcl1:
-            for i in range(self.num_layers):
-                if self.with_fan:
-                    self.gconvs.append(filter_args_create(MSG_FAN, kwargs))
-            
-            self.add_module("gcl", E_GCL(self.hidden_nf, self.hidden_nf, self.hidden_nf, 
-                                        edges_in_d=kwargs['dim_edge'],
-                                        act_fn=nn.SiLU(), residual=True, attention=True,
-                                        normalize=False, tanh=False))
-        else:
-            for i in range(self.num_layers):
-                if self.with_fan:
-                    self.gconvs.append(filter_args_create(MSG_FAN, kwargs))
-                    self.add_module("gcl_%d" % i, E_GCL(self.hidden_nf, self.hidden_nf, self.hidden_nf, 
-                                                        edges_in_d=kwargs['dim_edge'],
-                                                        act_fn=nn.SiLU(), residual=True, attention=True,
-                                                        normalize=False, tanh=False))
+
+        for i in range(self.num_layers):
+            self.gconvs.append(filter_args_create(MSG_FAN, kwargs))
+            self.add_module("gcl_%d" % i, E_GCL(self.hidden_nf, self.hidden_nf, self.hidden_nf, edges_in_d=kwargs['dim_edge'],
+                                                act_fn=nn.SiLU(), residual=True, attention=True,
+                                                normalize=False, tanh=False))
+
+        # self.add_module("Temporal Layer", EvolveGCNO(
+        #                                             in_channels = self.hidden_nf,
+        #                                             improved= False,
+        #                                             cached= False,
+        #                                             normalize= True,
+        #                                             add_self_loops= True))
+    # def forward(self, h, x, edges, edge_attr):
+    #     h = self.embedding_in(h)
+    #     for i in range(0, self.n_layers):
+    #         h, x, _ = self._modules["gcl_%d" % i](h, edges, x, edge_attr=edge_attr)
+    #     h = self.embedding_out(h)
+    #     return h, x
         
     def forward(self, data):
         h = data['node'].x[:]
@@ -640,107 +647,28 @@ class EGNN(nn.Module):
         x = data['coord'].x
         h = self.embedding_in(h)
         for i in range(0, self.num_layers):
-            if self.with_fan:
-                gconv = self.gconvs[i]
-                h, edge_attr, prob = gconv(h, edge_attr, edges)
+            gconv = self.gconvs[i]
+            h, edge_attr, prob = gconv(h, edge_attr, edges)
 
-                if i < (self.num_layers-1) or self.num_layers == 1:
-                    h = torch.nn.functional.relu(h)
-                    edge_attr = torch.nn.functional.relu(edge_attr)
+            if i < (self.num_layers-1) or self.num_layers == 1:
+                h = torch.nn.functional.relu(h)
+                edge_attr = torch.nn.functional.relu(edge_attr)
 
-            if self.drop_out:
-                h = self.drop_out(h)
-                edge_attr = self.drop_out(edge_attr)
-                
-            if not self.fan2_gcl1:
-                h, x, _, edge_feat = self._modules["gcl_%d" % i](h, edges, x, edge_attr=edge_attr)
-                edge_attr = edge_feat
-        
-        if self.fan2_gcl1:
-            h, x, _, edge_feat = self._modules["gcl"](h, edges, x, edge_attr=edge_attr)
+                if self.drop_out:
+                    h = self.drop_out(h)
+                    edge_attr = self.drop_out(edge_attr)
+
+            #if prob is not None:
+                #probs.append(prob.cpu().detach())
+            #else:
+                #probs.append(None)
+            h, x, _, edge_feat = self._modules["gcl_%d" % i](h, edges, x, edge_attr=edge_attr)
             edge_attr = edge_feat
-            
-        #print("Before embedding:", h.shape, edge_attr.shape, x.shape, edges.shape)
+
         h = self.embedding_out(h)
-        if self.with_x:
-            edge_attr = self.edge_embedding_out(edge_attr)
-            row, col = edges
-            edge_attr = torch.cat((edge_attr, x[row], x[col]), dim=1)
 
         return h, x, edge_attr
-
-class EQGNN(nn.Module):
-    # def __init__(self,
-    # reduce_dim_out = True, # whether to reduce out to dimension of 1, say for predicting new coordinates for type 1 features
-    # l2_dist_attention = False # set to False to try out MLP attention
-    # ):    
-    #     super(Equiformer, self).__init__(reduce_dim_out=reduce_dim_out, l2_dist_attention=False)
     
-    def __init__(self, **kwargs):
-        super(EQGNN, self).__init__()
-        from equiformer_pytorch import Equiformer
-        self.num_layers = kwargs['num_layers']
-        self.gconvs = torch.nn.ModuleList()
-        self.drop_out = None
-        if 'DROP_OUT_ATTEN' in kwargs:
-            self.drop_out = torch.nn.Dropout(kwargs['DROP_OUT_ATTEN'])
-
-        self.hidden_nf = kwargs['dim_node']
-
-        self.embedding_in = nn.Linear(kwargs['dim_node'], self.hidden_nf)
-        self.embedding_out = nn.Linear(self.hidden_nf, kwargs['dim_node'])
-        self.with_x = kwargs['with_x']
-        self.with_fan = kwargs['with_fan']
-        self.fan2_gcl1 = kwargs['fan2_gcl1']
-        
-        '''print model special configs'''
-        print(f"Model with X: {self.with_x}")
-        print(f"Model with FAN: {self.with_fan}")
-        print(f"Drop out rate: {self.drop_out}")
-        
-        if self.with_x:
-            self.edge_embedding_out = nn.Linear(self.hidden_nf, kwargs['dim_node'] - 12)
-            
-        for i in range(self.num_layers):
-            if self.with_fan:
-                self.gconvs.append(filter_args_create(MSG_FAN, kwargs))
-        
-        self.add_module("equiformer", Equiformer(
-                                                    reduce_dim_out=False,
-                                                    depth=2,
-                                                    edge_dim = kwargs['dim_edge'],
-                                                    num_edge_tokens = 256, #8
-                                                    num_tokens = 256, #20
-                                                    dim=kwargs['dim_node'],
-                                                    l2_dist_attention = False
-                                                ))
-        
-    def forward(self, data):
-        h = data['node'].x[:]
-        edges = data['node', 'to', 'node'].edge_index
-        edge_attr = data['node', 'to', 'node'].x
-        x = data['coord'].x
-        h = self.embedding_in(h)
-        # for i in range(0, self.num_layers):
-        #     if self.with_fan:
-        #         gconv = self.gconvs[i]
-        #         h, edge_attr, prob = gconv(h, edge_attr, edges)
-
-        #         if i < (self.num_layers-1) or self.num_layers == 1:
-        #             h = torch.nn.functional.relu(h)
-        #             edge_attr = torch.nn.functional.relu(edge_attr)
-
-        #     if self.drop_out:
-        #         h = self.drop_out(h)
-        #         edge_attr = self.drop_out(edge_attr)
-        print(h.shape)
-        print(edge_attr.shape)
-        print(edges.shape)
-        print(kwargs['dim_edge'])
-        print(kwargs['dim_node'])
-        h, x = self._modules["equiformer"](inputs = h, coors = x, edges = edge_attr).type1
-        print(h, x)
-        return h, x, edge_attr
 class GraphEdgeAttenNetworkLayers(torch.nn.Module):
     """ A sequence of scene graph convolution layers  """
     def __init__(self, **kwargs):

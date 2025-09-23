@@ -23,7 +23,7 @@ from ssg.trainer.eval_inst import EvalInst
 logger_py = logging.getLogger(__name__)
 
 
-class Trainer_SGFN(BaseTrainer, EvalInst):
+class Trainer_ESGNN(BaseTrainer, EvalInst):
     def __init__(self, cfg, model, node_cls_names: list, edge_cls_names: list,
                  device=None,  **kwargs):
         super().__init__(device)
@@ -80,6 +80,8 @@ class Trainer_SGFN(BaseTrainer, EvalInst):
             # break
         eval_dict = dict()
         obj_, edge_ = eval_tool.get_mean_metrics()
+        
+        #print("FHDSFBDEFHSDKVD",obj_, edge_)
         for k, v in obj_.items():
             # print(k)
             eval_dict[k+'_node_cls'] = v
@@ -139,13 +141,14 @@ class Trainer_SGFN(BaseTrainer, EvalInst):
         '''
         # Initialize loss dictionary and other values
         logs = {}
-
+        start_time = time.time()
         # Process data dictionary
         data = data.to(self._device)
         # data = self.process_data_dict(data)
 
         # Shortcuts
         # scan_id = data['scan_id']
+        # print(data)
         gt_node = data['node'].y
         gt_edge = data['node', 'to', 'node'].y
 
@@ -164,13 +167,42 @@ class Trainer_SGFN(BaseTrainer, EvalInst):
 
         # print('')
         # print('gt_rel.sum():',gt_rel.sum())
-
+        end_time = time.time()
+        # print("Loading data time ", end_time - start_time)
+        start_time = time.time()
         ''' make forward pass through the network '''
-        node_cls, edge_cls = self.model(data)
+        node_cls, edge_cls, node_vector, edge_vector = self.model(data)
+        
 
+        # ''' Save output '''
+        # output_path = os.path.join("output_test", data['scan_id'][0])
+        # if not os.path.exists(output_path):
+        #     os.makedirs(output_path)
+        
+        # save_path_node_cls = os.path.join(output_path, 'node_cls.pt')
+        # save_path_edge_cls = os.path.join(output_path, 'edge_cls.pt')
+        # save_path_node_vector = os.path.join(output_path, 'node_vector.pt')
+        # save_path_edge_vector = os.path.join(output_path, 'edge_vector.pt')
+        # save_path_data = os.path.join(output_path, 'data.pt')
+
+        # torch.save(node_cls,    save_path_node_cls)
+        # torch.save(edge_cls,    save_path_edge_cls)
+        # torch.save(node_vector, save_path_node_vector)
+        # torch.save(edge_vector, save_path_edge_vector)
+        # torch.save(data, save_path_data)
+        # """"""
+        # print(gt_edge)
+        # print(node_cls)
+        # if edge_cls.shape == None:
+        #     print("No edge")
+        # else:
+        #     print(edge_cls.shape)
+        # print("_______")
+        end_time = time.time()
+        # print("feed forward time: ", end_time - start_time)
         ''' calculate loss '''
         logs['loss'] = 0
-
+        start_time = time.time()
         if self.cfg.training.lambda_mode == 'dynamic':
             # calculate loss ratio base on the number of node and edge
             batch_node = node_cls.shape[0]
@@ -186,8 +218,10 @@ class Trainer_SGFN(BaseTrainer, EvalInst):
         ''' 2. edge class loss '''
         if edge_cls is not None:
             self.calc_edge_loss(logs, edge_cls, gt_edge, self.w_edge_cls)
-
+        end_time = time.time()
+        # print("loss compute time: ", end_time - start_time)
         '''3. get metrics'''
+        start_time = time.time()
         metrics = self.model.calculate_metrics(
             node_cls_pred=node_cls,
             node_cls_gt=gt_node,
@@ -213,6 +247,8 @@ class Trainer_SGFN(BaseTrainer, EvalInst):
                           #   node_gt,
                           #   edge_index_node_gt
                           )
+        end_time = time.time()
+        # print("Eval compute time: ", end_time - start_time)
 
         # if check_valid(logs):
         #     raise RuntimeWarning()
@@ -431,7 +467,7 @@ class Trainer_SGFN(BaseTrainer, EvalInst):
                         # seg2inst = data_seg['roi'].get('idx2iid',None)
 
                     ''' make forward pass through the network '''
-                    node_cls, edge_cls = self.model(data_seg)
+                    node_cls, edge_cls, _, _ = self.model(data_seg)
 
                     # convert them to list
                     assert seg_node_edges.shape[0] == 2
@@ -447,8 +483,8 @@ class Trainer_SGFN(BaseTrainer, EvalInst):
                     '''merge nodes'''
                     merged_idx2oid = dict()
                     merged_oid2idx = dict()
-
                     for idx in range(len(inst_oids)):
+                        print(seg_oid2idx)
                         oid = inst_oids[idx]
                         # merge predictions
                         if not ignore_missing:
@@ -466,12 +502,13 @@ class Trainer_SGFN(BaseTrainer, EvalInst):
                                 # Weighted Sum
                                 if idx not in predictions_weights['node']:
                                     predictions_weights['node'][idx] = 0
+
                                 merged_node_cls[idx, inst_valid_node_cls_indices] = \
                                     (merged_node_cls[idx, inst_valid_node_cls_indices] * predictions_weights['node'][idx] +
                                         node_cls_pred[seg_valid_node_cls_indices]
                                      ) / (predictions_weights['node'][idx]+1)
                                 predictions_weights['node'][idx] += 1
-
+                                print(redictions_weights['node'][idx])
                             else:
                                 assert noneidx_node_cls is not None
                                 # Only do this in the last estimation
@@ -721,7 +758,7 @@ class Trainer_SGFN(BaseTrainer, EvalInst):
 
                     ''' make forward pass through the network '''
                     tick = time.time()
-                    node_cls, edge_cls = self.model(**data)
+                    node_cls, edge_cls, _, _ = self.model(**data)
                     tock = time.time()
 
                     '''collect predictions on inst and edge pair'''
@@ -764,7 +801,6 @@ class Trainer_SGFN(BaseTrainer, EvalInst):
                         # inst_gt_pairs.add((src_inst_idx, tgt_inst_idx))
 
                     return node_pds, edge_pds, tock-tick
-
                 if isinstance(batch_data, list):
                     for idx, data in enumerate(batch_data):
                         fid = data['fid']
@@ -773,7 +809,6 @@ class Trainer_SGFN(BaseTrainer, EvalInst):
                         if pt > 0:
                             acc_time += pt
                             timer_counter += 1
-
                             fuse(nodes_pds_all, nodes_w, node_pds)
                             fuse(edges_pds_all, edges_w, edge_pds)
 

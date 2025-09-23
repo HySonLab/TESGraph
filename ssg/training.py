@@ -13,7 +13,7 @@ import codeLib.utils.moving_average as moving_average
 import torch.multiprocessing
 from pytictoc import TicToc
 logger_py = logging.getLogger(__name__)
-
+from termcolor import cprint
 
 class Trainer():
     def __init__(self, cfg, model_trainer: BaseTrainer,  # node_cls_names, edge_cls_names,
@@ -67,7 +67,10 @@ class Trainer():
 
         # '''init'''
         try:
-            load_dict = self.ckpt_io.load('model1.pt', device=cfg.DEVICE)
+            if cfg.TRAIN_FROM_SCRATCH:
+                load_dict = self.ckpt_io.load(f'new_{cfg.SAVED_MODEL_NAME}.pt', device=cfg.DEVICE)
+            else:
+                load_dict = self.ckpt_io.load(f'{cfg.SAVED_MODEL_NAME}_latest.pt', device=cfg.DEVICE)
         except FileExistsError:
             load_dict = dict()
         epoch_it = load_dict.get('epoch_it', -1)
@@ -76,7 +79,7 @@ class Trainer():
             'loss_val_best', -self.metric_sign * np.inf)
         self.patient = load_dict.get('patient', 0)
         
-        print("self.patient, max_patient, epoch_it,max_epoch",self.patient, max_patient, epoch_it,max_epoch)
+        cprint(f"self.patient, max_patient, epoch_it,max_epoch {self.patient, max_patient, epoch_it,max_epoch}", "yellow")
 
         '''check if exist criteria has met'''
         if self.patient >= max_patient or epoch_it >= max_epoch:
@@ -97,60 +100,89 @@ class Trainer():
         pbar = tqdm(range(epoch_it, max_epoch),
                     desc='[Epoch %02d]' % (epoch_it))
         avg_loss = 0
+        
+        cprint(f"TRAINING AND SAVING TO MODEL PATH:  {self.cfg.SAVED_MODEL_NAME}", "yellow")
+        #print("TEST VALIDATION:\n")
+        #self.run_validation(val_loader, logger, 0, 0)
+        # eval_dict = self.run_validation(val_loader, logger, 0, it)
+        # print("EVAL_DICT:\n", eval_dict)
+        
+        epoch_latest = 0
         for epoch in pbar:
-            # logger_py.info('Train epoch')
-            pbar.set_description('[Epoch %02d] loss=%.4f' % (epoch, avg_loss))
-            it, epo_time, _, avg_loss = self.train(
-                train_loader=train_loader,
-                val_loader=val_loader,
-                epoch_it=epoch,
-                it_start=it,
-                logger=logger
-            )
+            epoch_latest = epoch
+            try:
+                pbar.set_description('[Epoch %02d] loss=%.4f' % (epoch, avg_loss))
+                it, epo_time, _, avg_loss = self.train(
+                    train_loader=train_loader,
+                    val_loader=val_loader,
+                    epoch_it=epoch,
+                    it_start=it,
+                    logger=logger
+                )
 
-            if logger:
-                metrics = self.model_trainer.get_log_metrics()
-                for k, v in metrics.items():
-                    logger.add_scalar('train/'+k, v, it)
-                logger.add_scalar('train/epoch', epoch, it)
-                logger.add_scalar(
-                    'train/lr', self.model_trainer.optimizer.param_groups[0]['lr'], it)
+                if logger:
+                    metrics = self.model_trainer.get_log_metrics()
+                    for k, v in metrics.items():
+                        logger.add_scalar('train/'+k, v, it)
+                    logger.add_scalar('train/epoch', epoch, it)
+                    logger.add_scalar(
+                        'train/lr', self.model_trainer.optimizer.param_groups[0]['lr'], it)
 
-            # Visualization
-            # if (visualize_every > 0 and (it % visualize_every) == 0):
-            figs = self.model_trainer.visualize()
-            if logger:
-                for k, v in figs.items():
-                    logger.add_figure('train/'+k, v, it)
+                figs = self.model_trainer.visualize()
+                if logger:
+                    for k, v in figs.items():
+                        logger.add_figure('train/'+k, v, it)
 
-            # Save checkpoint
-            # logger_py.info('Saving checkpoint')
-            self.ckpt_io.save('model.pt',
-                              epoch_it=epoch,
-                              it=it,
-                              loss_val_best=self.metric_val_best,
-                              patient=self.patient)
+                # Save checkpoint
+                logger_py.info('Saving checkpoint')
+                if epoch % 5 == 0: #Saving per 3 epochs
+                    self.ckpt_io.save(f'{self.cfg.SAVED_MODEL_NAME}_checkpoint_{epoch}.pt',
+                                    epoch_it=epoch,
+                                    it=it,
+                                    loss_val_best=self.metric_val_best,
+                                    patient=self.patient)
+                    
+                    self.ckpt_io.save(f'{self.cfg.SAVED_MODEL_NAME}_latest.pt',
+                                    epoch_it=epoch,
+                                    it=it,
+                                    loss_val_best=self.metric_val_best,
+                                    patient=self.patient)
 
-            # validate
-            if (cfg.training.validate_every > 0 and (epoch+1) % cfg.training.validate_every == 0) or cfg.training.validate_every <= 0:
-                pbar.set_description(
-                    '[Epoch %02d] loss=%.4f it=%03d,Run Validation' % (epoch, avg_loss, it))
-                eval_dict = self.run_validation(val_loader, logger, epoch, it)
+                # validate
+                if (cfg.training.validate_every > 0 and (epoch+1) % cfg.training.validate_every == 0) or cfg.training.validate_every <= 0:
+                    pbar.set_description(
+                        '[Epoch %02d] loss=%.4f it=%03d,Run Validation' % (epoch, avg_loss, it))
+                    eval_dict = self.run_validation(val_loader, logger, epoch, it)
+                    #print("EVAL_DICT:\n", eval_dict)
 
-                if cfg.training.scheduler.method.lower() == 'reduceluronplateau':
-                    metric_val = eval_dict[self.selected_metric]
-                    # maybe make a EMA otherwise it's too sensitive to outliers.
-                    self.scheduler.step(metric_val)
-                else:
-                    self.scheduler.step()
+                    if cfg.training.scheduler.method.lower() == 'reduceluronplateau':
+                        metric_val = eval_dict[self.selected_metric]
+                        # maybe make a EMA otherwise it's too sensitive to outliers.
+                        self.scheduler.step(metric_val)
+                    else:
+                        self.scheduler.step()
 
-            # check patient
-            if max_patient > 0 and self.patient > max_patient:
-                logger_py.info('reach maximum patient! {} > {}. Stop training'.
-                               format(self.patient, max_patient))
-                break
+                # check patient
+                if max_patient > 0 and self.patient > max_patient:
+                    logger_py.info('reach maximum patient! {} > {}. Stop training'.
+                                format(self.patient, max_patient))
+                    break
+            
+            except:
+                self.ckpt_io.save(f'{self.cfg.SAVED_MODEL_NAME}_latest.pt',
+                epoch_it=epoch_latest,
+                it=it,
+                loss_val_best=self.metric_val_best,
+                patient=self.patient)
+                raise Exception("An error occured during training. Save latest checkpoint!")
 
-            # break
+            # end loop
+        #if end save latest
+        self.ckpt_io.save(f'{self.cfg.SAVED_MODEL_NAME}_latest.pt',
+                epoch_it=epoch_latest,
+                it=it,
+                loss_val_best=self.metric_val_best,
+                patient=self.patient)
 
         logger_py.info('Training finished.')
 
@@ -171,30 +203,39 @@ class Trainer():
         it_dataset = train_loader.__iter__()
         pbar = tqdm(it_dataset, leave=False)
         self.model_trainer.zero_metrics()
+        start_time = time.time()
+        one_iter_time = time.time()
         for data in pbar:
+            # print("Dataloader time ", time.time() - start_time)
             if data==0:
                 continue
             
             it += 1
             '''train step'''
             timer.tic()
+            start_time = time.time()
             logs = self.model_trainer.train_step(data, it)
             times['train_step'] = timer.tocvalue()
-
+            # print("Train step time ", time.time() - start_time)
+            start_time = time.time()
             # check
             if 'loss' not in logs:
                 continue
             loss = logs['loss']
-
+            end_time = time.time()
+            # print("Check time ", end_time - start_time)
             # update time
             avg_time.update(time.time()-it_time)
             it_time = time.time()
             # update loss
+            start_time = time.time()
             avg_loss.update(loss)
+            end_time = time.time()
+            # print("Update loss time ", end_time - start_time)
             # update description
             pbar.set_description('it=%03d, loss=%.4f, time=%.4f' %
                                 (it, avg_loss.avg, avg_time.avg))
-
+            start_time = time.time()
             # accumulate scalars
             for k, v in logs.items():
                 if isinstance(v, dict):
@@ -207,19 +248,31 @@ class Trainer():
                     logger.add_scalar(k, v.avg, it)
                 scalar_list = defaultdict(moving_average.MA)
             # break#TODO: comment me out after debug
+            # print("logging time ", time.time()-start_time)
+            start_time = time.time()
+            # print("total time ", time.time() - one_iter_time)
+            one_iter_time = time.time()
 
         epo_time = time.time() - epo_time
         del it_dataset
         return it, epo_time, avg_time.avg, avg_loss.avg
 
+    # The `run_validation` method in the Trainer class is responsible for evaluating the model on
+    # the validation dataset. It calculates the evaluation metrics, logs the results, and manages
+    # the checkpoint based on the validation performance.
+    # The `run_validation` method in the Trainer class is responsible for running the validation
+    # process on the validation dataset. It evaluates the model's performance on the validation
+    # data, calculates the selected metric (such as accuracy, loss, etc.), and logs the results.
+    # Additionally, it manages checkpoint saving based on the validation performance.
     def run_validation(self, val_loader, logger,
-                       epoch_it, it):
+                       epoch_it, it, eval = False):
         '''
         Run validation with logging and checkpoint management.
 
         '''
         torch.cuda.empty_cache()
         # only calculate topK in evaluation. it's slow.
+        
         eval_dict, *_ = self.model_trainer.evaluate(val_loader, topk=0)
         metric_val = eval_dict[self.selected_metric]
         torch.cuda.empty_cache()
@@ -232,22 +285,31 @@ class Trainer():
                 if isinstance(v, dict):
                     continue
                 logger.add_scalar('val/%s' % k, v, it)
-
+        
         metric_val_smoothed = self.smoother(metric_val)
-        if self.metric_sign * (metric_val - self.metric_val_best) > 0:
-            self.metric_val_best = metric_val
-            self.patient = 0
-            logger_py.info('New best model (%s %.4f)' %
-                           (self.metric_sign, metric_val))
-            self.ckpt_io.save('model_best.pt',
-                              epoch_it=epoch_it,
-                              it=it,
-                              loss_val_best=metric_val,
-                              patient=self.patient)
-        else:
-            if self.metric_sign * (metric_val_smoothed - self.metric_val_best) <= 0:
-                logger_py.info('new val metric is worse (%.4f %.4f).increase patient to %d (max patient %d)' %
-                               (metric_val_smoothed, self.metric_val_best, self.patient, self.cfg['training']['patient']))
-                self.patient += 1
+        if not eval:
+            if self.metric_sign * (metric_val - self.metric_val_best) > 0:
+                self.metric_val_best = metric_val
+                self.patient = 0
+                logger_py.info('New best model (%s %.4f)' %
+                            (self.metric_sign, metric_val))
+                    
+                self.ckpt_io.save(f'{self.cfg.SAVED_MODEL_NAME}_best_{epoch_it}.pt',
+                                epoch_it=epoch_it,
+                                it=it,
+                                loss_val_best=metric_val,
+                                patient=self.patient)
+                
+                self.ckpt_io.save(f'{self.cfg.SAVED_MODEL_NAME}_best.pt',
+                                epoch_it=epoch_it,
+                                it=it,
+                                loss_val_best=metric_val,
+                                patient=self.patient)
+                                
+            else:
+                if self.metric_sign * (metric_val_smoothed - self.metric_val_best) <= 0:
+                    logger_py.info('new val metric is worse (%.4f %.4f).increase patient to %d (max patient %d)' %
+                                (metric_val_smoothed, self.metric_val_best, self.patient, self.cfg['training']['patient']))
+                    self.patient += 1
 
         return eval_dict

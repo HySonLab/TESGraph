@@ -10,7 +10,6 @@ import copy
 from tqdm import tqdm
 import numpy as np
 import multiprocessing as mp
-import pickle
 
 # from utils import util_ply, util_data, util, define
 from codeLib.common import random_drop
@@ -44,14 +43,8 @@ class SGFNDataset (data.Dataset):
         self._device = config.DEVICE
         path = config.data['path']
         self.config = config
-        # self.config.data.load_cache = True #Day
         self.cfg = self.config
         self.mconfig = config.data
-        # print(self.mconfig)
-        # self.mconfig.load_images = False
-        # self.mconfig.load_points = True
-        # self.mconfig.node_feature_dim = 256
-        # print(self.mconfig)
         self.path = config.data.path
         self.label_file = config.data.label_file
         self.use_data_augmentation = self.mconfig.data_augmentation
@@ -157,11 +150,10 @@ class SGFNDataset (data.Dataset):
         self.open_filtered()
         scan_ids = set(self.filtered_data.keys()
                        ).intersection(set(selected_scans))
-        # scan_ids = [f"{scan_id}_subset_{i}" for scan_id in scan_ids for i in range(1,6)]
         self.scans = snp.pack(list(scan_ids))
         self.size = len(scan_ids)
 
-        '''check if pre-computed global image feature exist'''
+        '''check if pre-computed global image featur exist'''
         if not self.mconfig.is_roi_img and self.mconfig.load_images and self.cfg.data.use_precompute_img_feature:  # loading and memory issue. try to use precomputed
             # self.open_filtered()
             should_compute_image_feature = False
@@ -219,43 +211,24 @@ class SGFNDataset (data.Dataset):
         '''cache'''
         self.cache_data = dict()
         if self.config.data.load_cache and self.mconfig.load_points:
-            # ['train', 'validation', 'test']
-            if mode == "train":
-                path = '/home/quang.pham/3DSSG/data/3RScan/data_train_20.pkl'
-            elif mode == "test":
-                path = '/home/quang.pham/3DSSG/data/3RScan/data_test_20.pkl'
-            elif mode == "validation":
-                path = '/home/quang.pham/3DSSG/data/3RScan/data_val_20.pkl'
-                print("haha")
-            
-            print(f"LOAD DATA TO CACHE {path}")
-            check_file = os.path.isfile(path)
-            if check_file:
-                with open(path, 'rb') as f:  
-                    self.cache_data = pickle.load(f)[0]
-                    # self.cache_data = pickle.load(f)
-                    f.close()
-            else:
-                with open(path, 'wb') as f:  # Python 3: open(..., 'wb')
-                    pool = mp.Pool(60)
-                    pool.daemon = True
+            print('load data to cache')
+            pool = mp.Pool(8)
+            pool.daemon = True
 
-                    for scan_id in scan_ids:
-                        # print(scan_id)
-                        scan_id_no_split = scan_id.rsplit('_', 1)[0]
-                        if 'scene' in scan_id:
-                            path = os.path.join(self.root_scannet, scan_id_no_split)
-                        else:
-                            path = os.path.join(self.root_3rscan, scan_id_no_split)
-                        if scan_id_no_split not in self.cache_data:
-                            self.cache_data[scan_id_no_split] = pool.apply_async(load_mesh,
-                                                                                (path, self.label_file, self.use_rgb, self.use_normal))
-                    pool.close()
-                    pool.join()
-                    for key, item in self.cache_data.items():
-                        self.cache_data[key] = item.get()
-                    pickle.dump([self.cache_data], f)
-                    f.close()
+            for scan_id in scan_ids:
+                scan_id_no_split = scan_id.rsplit('_', 1)[0]
+                if 'scene' in scan_id:
+                    path = os.path.join(self.root_scannet, scan_id_no_split)
+                else:
+                    path = os.path.join(self.root_3rscan, scan_id_no_split)
+                if scan_id_no_split not in self.cache_data:
+                    self.cache_data[scan_id_no_split] = pool.apply_async(load_mesh,
+                                                                         (path, self.label_file, self.use_rgb, self.use_normal))
+            pool.close()
+            pool.join()
+            for key, item in self.cache_data.items():
+                self.cache_data[key] = item.get()
+
         self.reset_data()
         
     # def __iter__():
@@ -286,11 +259,11 @@ class SGFNDataset (data.Dataset):
             self.image_feature = h5py.File(self.path_img_feature, 'r')
 
     def __getitem__(self, index):
-        try:
+        #try:
             timers = dict()
             timer = TicToc()
             scan_id = snp.unpack(self.scans, index)  # self.scans[idx]
-            # print(scan_id)
+
             '''open data'''
             timer.tic()
             # open
@@ -298,14 +271,13 @@ class SGFNDataset (data.Dataset):
             self.open_data()
 
             # get SG data
-            scan_data_raw = self.sg_data[scan_id]#.to(self._device) 
-            # print("hu")
-            scan_data = raw_to_data(scan_data_raw)#.to(self._device) 
+            scan_data_raw = self.sg_data[scan_id]
+            scan_data = raw_to_data(scan_data_raw)
             # shortcut
             object_data = scan_data['nodes']
             relationships_data = scan_data['relationships']
 
-            filtered_data = raw_to_data(self.filtered_data[scan_id])#.to(self._device) 
+            filtered_data = raw_to_data(self.filtered_data[scan_id])
             filtered_node_indices = filtered_data[define.NAME_FILTERED_OBJ_INDICES]
             filtered_kf_indices = filtered_data[define.NAME_FILTERED_KF_INDICES]
 
@@ -340,27 +312,22 @@ class SGFNDataset (data.Dataset):
 
             ''' load point cloud data '''
             timer.tic()
-            # self.mconfig.load_points = True
             if self.mconfig.load_points:
                 if 'scene' in scan_id:
                     path = os.path.join(self.root_scannet, scan_id)
                 else:
                     path = os.path.join(self.root_3rscan, scan_id)
+
                 if self.config.data.load_cache:
-                    data = self.cache_data[scan_id]#.to(self._device) 
+                    data = self.cache_data[scan_id]
                 else:
-                    # print("huhuhuhuhuhu")
                     data = load_mesh(path, self.label_file,
-                                    self.use_rgb, self.use_normal)#.to(self._device) 
-                    
+                                    self.use_rgb, self.use_normal)
                 points = copy.deepcopy(data['points'])
                 instances = copy.deepcopy(data['instances'])
 
                 if self.use_data_augmentation and not self.for_eval:
-                    points = self.data_augmentation(points)#.to(self._device) 
-            
-                #print("POINTS", points)
-                timers['count_pointcloud'] = [len(points), len(points[0])]
+                    points = self.data_augmentation(points)
             timers['load_pc'] = timer.tocvalue()
 
             '''extract 3D node classes and instances'''
@@ -379,7 +346,7 @@ class SGFNDataset (data.Dataset):
             '''extract relationships data'''
             timer.tic()
             relationships_3D = self.__extract_relationship_data(
-                relationships_data, oid2idx)#.to(self._device) 
+                relationships_data, oid2idx)
             timers['extract_relationship_data'] = timer.tocvalue()
 
             # relationships_3D_mask = [] # change obj idx to obj mask idx
@@ -430,12 +397,11 @@ class SGFNDataset (data.Dataset):
                 gtIdx_edge_cls.append(value)
 
             # gtIdx_entities_cls = torch.from_numpy(np.array(gtIdx_entities_cls))
-            # print(self._device)
             gtIdx2ebIdx = torch.tensor(
-                gtIdx2ebIdx, dtype=torch.long).t().contiguous()#.to(self._device) 
+                gtIdx2ebIdx, dtype=torch.long).t().contiguous()
             # gtIdx_edge_cls = torch.from_numpy(np.array(gtIdx_edge_cls))
             gtIdx_edge_index = torch.tensor(
-                gtIdx_edge_index, dtype=torch.long).t().contiguous()#.to(self._device) 
+                gtIdx_edge_index, dtype=torch.long).t().contiguous()
 
             '''sample 3D edges'''
             timer.tic()
@@ -454,15 +420,15 @@ class SGFNDataset (data.Dataset):
                     scan_id, points, instances, cat, filtered_instances)
                 timers['sample_points'] = timer.tocvalue()
 
-                bboxes_tensor = torch.Tensor(np.array(bboxes))#.to(self._device) 
+                bboxes_tensor = torch.Tensor(np.array(bboxes))
                 bboxes_tensor = torch.reshape(bboxes_tensor, 
-                                            (bboxes_tensor.shape[0], bboxes_tensor.shape[1]*bboxes_tensor.shape[2]))#.to(self._device) 
+                                            (bboxes_tensor.shape[0], bboxes_tensor.shape[1]*bboxes_tensor.shape[2]))
 
                 '''build rel points'''
                 timer.tic()
                 if self.mconfig.rel_data_type == 'points':
                     rel_points = self.__sample_rel_points(
-                        points, instances, idx2oid, bboxes, edge_indices_3D)#.to(self._device) 
+                        points, instances, idx2oid, bboxes, edge_indices_3D)
                 timers['sample_rel_points'] = timer.tocvalue()
 
             '''load images'''
@@ -523,10 +489,10 @@ class SGFNDataset (data.Dataset):
             inst_indices = [seg2inst[k] for k in idx2oid.values()]
 
             ''' to tensor '''
-            gt_class_3D = torch.from_numpy(np.array(cat))#.to(self._device) 
-            tensor_oid = torch.from_numpy(np.array(inst_indices))#.to(self._device) 
+            gt_class_3D = torch.from_numpy(np.array(cat))
+            tensor_oid = torch.from_numpy(np.array(inst_indices))
 
-            edge_indices_3D = torch.tensor(edge_indices_3D, dtype=torch.long)#.to(self._device) 
+            edge_indices_3D = torch.tensor(edge_indices_3D, dtype=torch.long)
             # new_edge_index_has_gt = torch.tensor(new_edge_index_has_gt,dtype=torch.long)
             # idx2iid = seg2inst
             # idx2iid = torch.LongTensor([seg2inst[oid] if oid in seg2inst else oid for oid in idx2oid.values() ]) # mask idx to instance idx
@@ -550,16 +516,16 @@ class SGFNDataset (data.Dataset):
             # gtIdx_entities_cls =None
             # gtIdx_edge_cls = None
             output['node_gt'].x = torch.zeros(
-                [len(gtIdx_entities_cls), 1])#.to(self._device)   # dummy
+                [len(gtIdx_entities_cls), 1])  # dummy
             output['node_gt'].clsIdx = gtIdx_entities_cls if len(
-                gtIdx_entities_cls) > 0 else torch.zeros([len(gtIdx_entities_cls), 1])#.to(self._device)   # dummy
+                gtIdx_entities_cls) > 0 else torch.zeros([len(gtIdx_entities_cls), 1])  # dummy
             output['node_gt', 'to', 'node'].edge_index = gtIdx2ebIdx
             output['node_gt', 'to', 'node_gt'].clsIdx = gtIdx_edge_cls if len(
-                gtIdx_edge_cls) > 0 else torch.zeros([len(gtIdx_entities_cls), 1])#.to(self._device)   # dummy
+                gtIdx_edge_cls) > 0 else torch.zeros([len(gtIdx_entities_cls), 1])  # dummy
             output['node_gt', 'to', 'node_gt'].edge_index = gtIdx_edge_index
 
             # edges for computing features
-            output['node', 'to', 'node'].edge_index = edge_indices_3D.t().contiguous()#.to(self._device) 
+            output['node', 'to', 'node'].edge_index = edge_indices_3D.t().contiguous()
             output['node', 'to', 'node'].y = gt_rels_3D
 
             if self.mconfig.load_points:
@@ -584,7 +550,7 @@ class SGFNDataset (data.Dataset):
                     # if not self.mconfig.load_points:
                     #     output['node'].desp = node_descriptor_for_image
                 else:
-                    output['roi'].x = torch.zeros([len(img_bounding_boxes), 1])#.to(self._device) 
+                    output['roi'].x = torch.zeros([len(img_bounding_boxes), 1])
                     output['roi'].y = gt_class_image
                     output['roi'].box = img_bounding_boxes
                     output['roi'].img = images
@@ -592,15 +558,15 @@ class SGFNDataset (data.Dataset):
                     output['roi'].oid = img_oid_indices
 
                     # need this for temporal edge graph
-                    output['edge2D'].x = torch.zeros([len(temporal_node_graph), 1])#.to(self._device) 
+                    output['edge2D'].x = torch.zeros([len(temporal_node_graph), 1])
 
                     output['roi', 'to',
-                        'roi'].edge_index = image_edge_indices.t().contiguous()#.to(self._device) 
+                        'roi'].edge_index = image_edge_indices.t().contiguous()
                     output['roi', 'to', 'roi'].y = gt_rels_2D
                     output['roi', 'temporal',
-                        'roi'].edge_index = temporal_node_graph.t().contiguous()#.to(self._device) 
+                        'roi'].edge_index = temporal_node_graph.t().contiguous()
                     output['edge2D', 'temporal',
-                        'edge2D'].edge_index = temporal_edge_graph.t().contiguous()#.to(self._device) 
+                        'edge2D'].edge_index = temporal_edge_graph.t().contiguous()
 
                     # print('image_edge_indices',image_edge_indices)
                     # print('gt_rels_2D',gt_rels_2D)
@@ -611,14 +577,14 @@ class SGFNDataset (data.Dataset):
                     # tmp3 = torch.sort(torch.unique(torch.from_numpy(np.array([seg2inst[k] for k in tmp2.tolist()]))))[0]
                     # assert torch.equal(tmp1,tmp3)
                     # assert torch.equal(tmp1,tmp2)
-            # print(timers)
+
             '''release'''
             self.reset_data()
             return output
         
-        except:
-            print("\nDATA LOADER GETITEM ERROR. SKIP THIS DATA")
-            return 0
+        # except:
+        #     print("\nDATA LOADER GETITEM ERROR. SKIP THIS DATA")
+        #     return 0
 
     def __len__(self):
         return self.size
@@ -1512,22 +1478,15 @@ def zero_mean(point, normalize: bool):
 
 if __name__ == '__main__':
     import codeLib
-    #path = './experiments/config_2DSSG_ORBSLAM3_l20_6_1.yaml'
-    # path = '/home/ubuntu/20quang.ppm/3DSSG_HIHI/3DSSG/configs/test_data_set.yaml'
-    path = '/home/ubuntu/20quang.ppm/3DSSG_HIHI/3DSSG/configs/dataset/config_base_3RScan_full_l20.yaml' #'/home/ubuntu/20quang.ppm/3DSSG_HIHI/3DSSG/configs/config_SGFN_full_l20.yaml'
+    path = './experiments/config_2DSSG_ORBSLAM3_l20_6_1.yaml'
     config = codeLib.Config(path)
 
-    config.DEVICE = 'cuda:0'
+    config.DEVICE = '1'
     # config.dataset.root = "../data/example_data/"
     # config.dataset.label_file = 'inseg.ply'
     # sample_in_runtime = True
     # config.dataset.data_augmentation=True
     # split_type = 'validation_scans' # ['train_scans', 'validation_scans','test_scans']
     dataset = SGFNDataset(config, 'validation')
-    import time
-    ## 3
-    for i in range(len(dataset)):
-        start_time = time.time()
-        items = dataset.__getitem__(i)
-        print(f"TIME FOR {i}: {time.time() - start_time}")
+    items = dataset.__getitem__(0)
     # print(items)

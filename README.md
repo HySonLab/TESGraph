@@ -33,7 +33,7 @@ python main.py --mode train --config ./configs/config_ESGNN_full_l20.yaml
 ```
 
 You can then go to WanDB and track the results. You can also compare with multiple results by running the training of other methods.
-
+The pretrained weights can be found [here](https://mbzuaiac-my.sharepoint.com/:f:/g/personal/quang_pham_mbzuai_ac_ae/EtjNv8H24S9Przag0AAQNokBfASR6jiRrIFZEQwfzWFZeg?e=Uq4XEO)
 ## Temporal Model Training
 
 Updating. Please refer to the notebook to check for our model architecture and training process if you need.

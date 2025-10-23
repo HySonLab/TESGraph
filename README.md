@@ -1,7 +1,7 @@
 # TESGNN: 3D Temporal Equivariant Scene Graph Neural Networks
 
 ![Overall-Architecture](overall_V3.png)
-
+## News: Our paper is accepted at Transactions on Machine Learning Research (TMLR). Check it out [here](https://openreview.net/forum?id=boM0kkYPzE)
 ## Abstract
 
 Scene graphs have proven to be highly effective for various scene understanding tasks due to their compact and explicit representation of relational information. However, current methods often overlook the critical importance of preserving symmetry when generating scene graphs from 3D point clouds, which can lead to reduced accuracy and robustness, particularly when dealing with noisy, multi-view data. This work, to the best of our knowledge, presents the first implementation of an Equivariant Scene Graph Neural Network (ESGNN) to generate semantic scene graphs from 3D point clouds, specifically for enhanced scene understanding. Furthermore, a significant limitation of prior methods is the absence of temporal modeling to capture time-dependent relationships among dynamically evolving entities within a scene. To address this gap, we introduce a novel temporal layer that leverages the symmetry-preserving properties of ESGNN to fuse scene graphs across multiple sequences into a unified global representation by an approximate graph-matching algorithm. Our combined architecture, termed the Temporal Equivariant Scene Graph Neural Network (TESGNN), not only surpasses existing state-of-the-art methods in scene estimation accuracy but also achieves faster convergence. Importantly, TESGNN is computationally efficient and straightforward to implement using existing frameworks, making it well-suited for real-time applications in robotics and computer vision. This approach paves the way for more robust and scalable solutions to complex multi-view scene understanding challenges.
@@ -22,14 +22,14 @@ source Init.sh
 
 ```python
 ### Train single
-python main_esgnn.py --mode train --config /path/to/your/config/file
+python main.py --mode train --config /path/to/your/config/file
 ### Eval one
-python main_esgnn.py --mode eval --config /path/to/your/config/file
+python main.py --mode eval --config /path/to/your/config/file
 ```
 
 Using the config for ESGNN should be:
 ```python
-python main_esgnn.py --mode train --config ./configs/config_ESGNN_full_l20.yaml
+python main.py --mode train --config ./configs/config_ESGNN_full_l20.yaml
 ```
 
 You can then go to WanDB and track the results. You can also compare with multiple results by running the training of other methods.

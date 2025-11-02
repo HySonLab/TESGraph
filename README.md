@@ -41,14 +41,15 @@ Updating. Please refer to the notebook to check for our model architecture and t
 ## Please cite our work!
 
 ```bibtex
-@article{pham2024tesgnntemporalequivariantscene,
-      title={TESGNN: Temporal Equivariant Scene Graph Neural Networks for Efficient and Robust Multi-View 3D Scene Understanding}, 
-      author={Quang P. M. Pham and Khoi T. N. Nguyen and Lan C. Ngo and Dezhen Song and Truong Do and Truong Son Hy},
-      year={2024},
-      eprint={2411.10509},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV},
-      url={https://arxiv.org/abs/2411.10509}, 
+@article{
+quang2025tesgnn,
+title={{TESGNN}: Temporal Equivariant Scene Graph Neural Networks for Efficient and Robust Multi-View 3D Scene Understanding},
+author={Pham Phuoc Minh Quang and Nguyen Tiet Nguyen Khoi and Ngo Chi Lan and Do Tho Truong and Dezhen Song and Truong-Son Hy},
+journal={Transactions on Machine Learning Research},
+issn={2835-8856},
+year={2025},
+url={https://openreview.net/forum?id=boM0kkYPzE},
+note={}
 }
 ```
 
